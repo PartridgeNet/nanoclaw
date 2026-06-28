@@ -156,6 +156,8 @@ Key files: `src/container-restart.ts`, `src/container-runner.ts` (`killContainer
 
 ## Secrets / Credentials / OneCLI
 
+> **PartridgeNet:** the OneCLI gateway is **not** local — it runs on `nipogi-e3` over Tailscale (`http://100.71.226.93:10254`) as a shared, multi-machine vault in open `local` auth mode. Before changing OneCLI URL/auth/networking, read [docs/onecli-remote-gateway.md](docs/onecli-remote-gateway.md).
+
 API keys, OAuth tokens, and auth credentials are managed by the OneCLI gateway. Secrets are injected into per-agent containers at request time — none are passed in env vars or through chat context. The container agent sees this via the `onecli-gateway` container skill (`container/skills/onecli-gateway/SKILL.md`), which teaches it how the proxy works, how to handle auth errors, and to never ask for raw credentials. Host-side wiring: `src/modules/approvals/onecli-approvals.ts`, `ensureAgent()` in `container-runner.ts`. Run `onecli --help`.
 
 ### Secret modes
@@ -202,17 +204,6 @@ Four types of skills. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full taxono
 ## Contributing
 
 Before creating a PR, adding a skill, or preparing any contribution, you MUST read [CONTRIBUTING.md](CONTRIBUTING.md). It covers accepted change types, the four skill types and their guidelines, `SKILL.md` format rules, and the pre-submission checklist.
-
-## PR Hygiene
-
-Before creating a PR, run these checks:
-
-```bash
-git diff upstream/main --stat HEAD
-git log upstream/main..HEAD --oneline
-```
-
-Show the output and wait for approval. Installation-specific files (group files, .claude/settings.json, local configs) should not be included.
 
 ## Development
 
@@ -281,6 +272,7 @@ This project uses pnpm with `minimumReleaseAge: 4320` (3 days) in `pnpm-workspac
 | [docs/v1-to-v2-changes.md](docs/v1-to-v2-changes.md) | v1→v2 architecture diff — vocabulary for where v1 things moved |
 | [docs/migration-dev.md](docs/migration-dev.md) | Migration development guide — testing, debugging, dev loop |
 | [docs/provider-migration.md](docs/provider-migration.md) | Switching a live agent group between providers (e.g. Claude → Codex) — what carries over, rollback |
+| [docs/onecli-remote-gateway.md](docs/onecli-remote-gateway.md) | **PartridgeNet:** OneCLI gateway is hosted remotely on `nipogi-e3` over Tailscale (shared vault, `local` auth mode), not on the Mac — topology, ufw, wiring, open items |
 | [docs/customizing.md](docs/customizing.md) | Short intro to customizing via skills |
 | [docs/skills-model.md](docs/skills-model.md) | The skills model in full: recipes, tests, upgrades, migrations |
 | [docs/skill-guidelines.md](docs/skill-guidelines.md) | Authoritative checklist for writing a skill |

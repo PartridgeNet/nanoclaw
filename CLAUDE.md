@@ -13,6 +13,10 @@ If you are a fresh install (you ran `git clone`, not `git pull`) and there are n
 
 ---
 
+> **PartridgeNet fork note**
+>
+> This fork is the long-running NanoClaw instance repo for the PartridgeNet GitHub organization, which hosts repositories serving the owner and their family. Local code changes for those use cases should be committed here. Any upstream-associated repos needed during NanoClaw setup should be forked into PartridgeNet before being merged or installed here. Upstream NanoClaw and associated-repo updates should be pulled in regularly for improvements and fixes while preserving PartridgeNet-specific changes, not by replacing this fork's history or overwriting local commits.
+
 # NanoClaw
 
 Personal Claude assistant. See [README.md](README.md) for philosophy and setup. Architecture lives in `docs/`.

@@ -107,6 +107,16 @@ export interface McpServerConfig {
   command: string;
   args: string[];
   env: Record<string, string>;
+  /**
+   * Streamable HTTP (remote URL) transport. When set, providers that support
+   * it (Codex) connect to this URL instead of spawning the stdio `command`
+   * above. Auth for NanoClaw normally rides the OneCLI gateway proxy, so
+   * `bearer_token_env_var` / `http_headers` are only needed for servers that
+   * authenticate directly. Ignored by stdio-only providers.
+   */
+  url?: string;
+  bearer_token_env_var?: string;
+  http_headers?: Record<string, string>;
 }
 
 export interface AgentQuery {

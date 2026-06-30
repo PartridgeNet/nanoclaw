@@ -17,10 +17,18 @@ import { getAgentGroup } from './db/agent-groups.js';
 import type { AgentGroup, ContainerConfigRow } from './types.js';
 
 export interface McpServerConfig {
-  command: string;
+  command?: string;
   args?: string[];
   env?: Record<string, string>;
   instructions?: string;
+  /**
+   * Streamable HTTP (remote URL) transport. When set, providers that support
+   * it (Codex) connect to this URL instead of spawning the stdio `command`.
+   * Round-trips verbatim through `mcp_servers` JSON into `container.json`.
+   */
+  url?: string;
+  bearer_token_env_var?: string;
+  http_headers?: Record<string, string>;
 }
 
 export interface AdditionalMountConfig {

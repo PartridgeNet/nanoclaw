@@ -82,22 +82,28 @@ export const addMcpServer: McpToolDefinition = {
   tool: {
     name: 'add_mcp_server',
     description:
-      'Wire an EXISTING third-party MCP server into YOUR per-agent runtime config — you must already know the exact `command` + `args` to invoke it (e.g. `npx @modelcontextprotocol/server-github`). Requires admin approval; fire-and-forget.',
+      'Wire an EXISTING third-party MCP server into YOUR per-agent runtime config. For a LOCAL (stdio) server, pass the exact `command` + `args` to invoke it (e.g. `npx @modelcontextprotocol/server-github`). For a REMOTE streamable-HTTP server, pass `url` instead of `command` — no wrapper needed (auth normally rides the OneCLI gateway; only set `bearer_token_env_var` / `http_headers` for servers that authenticate directly). Requires admin approval; fire-and-forget.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         name: { type: 'string', description: 'MCP server name (unique identifier)' },
-        command: { type: 'string', description: 'Command to run the MCP server' },
-        args: { type: 'array', items: { type: 'string' }, description: 'Command arguments' },
-        env: { type: 'object', description: 'Environment variables for the server' },
+        command: { type: 'string', description: 'Command to run a LOCAL stdio MCP server (omit for HTTP servers)' },
+        args: { type: 'array', items: { type: 'string' }, description: 'Command arguments (stdio only)' },
+        env: { type: 'object', description: 'Environment variables for the server (stdio only)' },
+        url: { type: 'string', description: 'URL of a REMOTE streamable-HTTP MCP server (use instead of command)' },
+        bearer_token_env_var: { type: 'string', description: 'Env var holding a bearer token for an HTTP server (optional)' },
+        http_headers: { type: 'object', description: 'Static HTTP headers for an HTTP server (optional)' },
       },
-      required: ['name', 'command'],
+      required: ['name'],
     },
   },
   async handler(args) {
     const name = args.name as string;
-    const command = args.command as string;
-    if (!name || !command) return err('name and command are required');
+    const command = args.command as string | undefined;
+    const url = args.url as string | undefined;
+    if (!name) return err('name is required');
+    if (!command && !url) return err('either command (local stdio) or url (remote HTTP) is required');
+    if (command && url) return err('provide either command or url, not both');
 
     const requestId = generateId();
     writeMessageOut({
@@ -106,13 +112,21 @@ export const addMcpServer: McpToolDefinition = {
       content: JSON.stringify({
         action: 'add_mcp_server',
         name,
-        command,
-        args: (args.args as string[]) || [],
-        env: (args.env as Record<string, string>) || {},
+        ...(url
+          ? {
+              url,
+              bearer_token_env_var: (args.bearer_token_env_var as string) || undefined,
+              http_headers: (args.http_headers as Record<string, string>) || undefined,
+            }
+          : {
+              command,
+              args: (args.args as string[]) || [],
+              env: (args.env as Record<string, string>) || {},
+            }),
       }),
     });
 
-    log(`add_mcp_server: ${requestId} → "${name}" (${command})`);
+    log(`add_mcp_server: ${requestId} → "${name}" (${url ?? command})`);
     return ok(`MCP server request submitted. You will be notified when admin approves or rejects.`);
   },
 };

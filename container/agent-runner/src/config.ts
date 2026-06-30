@@ -15,7 +15,17 @@ export interface RunnerConfig {
   groupName: string;
   agentGroupId: string;
   maxMessagesPerPrompt: number;
-  mcpServers: Record<string, { command: string; args: string[]; env: Record<string, string> }>;
+  mcpServers: Record<
+    string,
+    {
+      command: string;
+      args: string[];
+      env: Record<string, string>;
+      url?: string;
+      bearer_token_env_var?: string;
+      http_headers?: Record<string, string>;
+    }
+  >;
   model?: string;
   effort?: string;
 }

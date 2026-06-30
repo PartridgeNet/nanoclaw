@@ -3,6 +3,8 @@ onlyBuiltDependencies:
   - esbuild
   - protobufjs
   - sharp
+patchedDependencies:
+  '@chat-adapter/slack@4.29.0': patches/@chat-adapter__slack@4.29.0.patch
 
 pnpm:
   minimumReleaseAge: 4320

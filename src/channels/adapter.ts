@@ -101,6 +101,9 @@ export interface OutboundMessage {
   kind: string;
   content: unknown; // parsed JSON from messages_out
   files?: OutboundFile[]; // file attachments from the session outbox
+  /** Display name of the agent group that produced this message. Channels that
+   *  support a per-message sender identity (Slack) may surface it; others ignore it. */
+  senderName?: string;
 }
 
 /** Discovered conversation info (from syncConversations). */

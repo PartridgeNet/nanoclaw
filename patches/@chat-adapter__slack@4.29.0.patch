@@ -1,0 +1,32 @@
+diff --git a/dist/index.js b/dist/index.js
+index dd24754940357407f5116920325c427ffac61d03..4ff56002c2badca5138c800bb7e84a2e9ff02c92 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -2788,6 +2788,11 @@ var SlackAdapter = class _SlackAdapter {
+   }
+   async postMessage(threadId, _message) {
+     const message = await this.resolveMessageMentions(_message, threadId);
++    const authorship = _message && typeof _message === "object" ? {
++      ...(_message.username ? { username: _message.username } : {}),
++      ...(_message.icon_emoji ? { icon_emoji: _message.icon_emoji } : {}),
++      ...(_message.icon_url ? { icon_url: _message.icon_url } : {})
++    } : {};
+     const { channel, threadTs: rawThreadTs } = this.decodeThreadId(threadId);
+     const threadTs = rawThreadTs || void 0;
+     try {
+@@ -2820,6 +2825,7 @@ var SlackAdapter = class _SlackAdapter {
+             text: fallbackText,
+             // Fallback for notifications
+             blocks,
++            ...authorship,
+             unfurl_links: false,
+             unfurl_media: false
+           })
+@@ -2845,6 +2851,7 @@ var SlackAdapter = class _SlackAdapter {
+           channel,
+           thread_ts: threadTs,
+           ...payload,
++          ...authorship,
+           unfurl_links: false,
+           unfurl_media: false
+         })

@@ -83,6 +83,13 @@ export interface ChatSdkBridgeConfig {
    * and reactions still target the head of the reply.
    */
   maxTextLength?: number;
+  /**
+   * When set, maps an agent group name to the per-message sender name the
+   * platform should display (forwarded as Slack's `username` override). Channels
+   * that don't support per-message identity leave this unset and behave as
+   * before — the extra `username` field is harmless for adapters that ignore it.
+   */
+  senderNameFormat?: (agentName: string) => string;
 }
 
 /**
@@ -406,6 +413,16 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
       const tid = threadId ?? platformId;
       const content = message.content as Record<string, unknown>;
 
+      // Per-message sender identity (Slack `username` override). Only set when
+      // the channel opted in via senderNameFormat AND the host supplied the
+      // agent group name. The forwarding into chat.postMessage lives in the
+      // patched @chat-adapter/slack; adapters without the patch ignore it.
+      // Files-only messages post via files.upload, which can't carry a username
+      // override — that path is left unchanged (see plan known-limitation).
+      const username =
+        config.senderNameFormat && message.senderName ? config.senderNameFormat(message.senderName) : undefined;
+      const authorship = username ? { username } : {};
+
       if (content.operation === 'edit' && content.messageId) {
         await adapter.editMessage(tid, content.messageId as string, {
           markdown: transformText((content.text as string) || (content.markdown as string) || ''),
@@ -447,6 +464,7 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
         const result = await adapter.postMessage(tid, {
           card,
           fallbackText: `${title}\n\n${question}\nOptions: ${options.map((o) => o.label).join(', ')}`,
+          ...authorship,
         });
         return result?.id;
       }
@@ -500,7 +518,7 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
         }
 
         const card = Card({ title, children: cardChildren });
-        const result = await adapter.postMessage(tid, { card, fallbackText });
+        const result = await adapter.postMessage(tid, { card, fallbackText, ...authorship });
         return result?.id;
       }
 
@@ -525,7 +543,7 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
           const attachFiles = i === 0 && fileUploads && fileUploads.length > 0;
           const result = await adapter.postMessage(
             tid,
-            attachFiles ? { markdown: chunk, files: fileUploads } : { markdown: chunk },
+            attachFiles ? { markdown: chunk, files: fileUploads, ...authorship } : { markdown: chunk, ...authorship },
           );
           if (i === 0) firstId = result?.id;
         }

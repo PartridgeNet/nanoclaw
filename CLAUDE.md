@@ -273,6 +273,7 @@ This project uses pnpm with `minimumReleaseAge: 4320` (3 days) in `pnpm-workspac
 | [docs/migration-dev.md](docs/migration-dev.md) | Migration development guide — testing, debugging, dev loop |
 | [docs/provider-migration.md](docs/provider-migration.md) | Switching a live agent group between providers (e.g. Claude → Codex) — what carries over, rollback |
 | [docs/onecli-remote-gateway.md](docs/onecli-remote-gateway.md) | **PartridgeNet:** OneCLI gateway is hosted remotely on `nipogi-e3` over Tailscale (shared vault, `local` auth mode), not on the Mac — topology, ufw, wiring, open items |
+| [docs/slack-agent-sender-name.md](docs/slack-agent-sender-name.md) | **PartridgeNet:** Slack sender shows `NanoClaw [<agent-group>]` — threaded `senderName`, the `@chat-adapter/slack` pnpm patch, the `chat:write.customize` scope, deploy + maintenance |
 | [docs/customizing.md](docs/customizing.md) | Short intro to customizing via skills |
 | [docs/skills-model.md](docs/skills-model.md) | The skills model in full: recipes, tests, upgrades, migrations |
 | [docs/skill-guidelines.md](docs/skill-guidelines.md) | Authoritative checklist for writing a skill |

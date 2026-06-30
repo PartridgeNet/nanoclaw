@@ -231,6 +231,27 @@ describe('channel registry — instance keying', () => {
     );
     expect(tester.delivered).toHaveLength(1);
   });
+
+  it('threads senderName through to the adapter OutboundMessage', async () => {
+    const reg = await import('./channel-registry.js');
+    const mock = createMockAdapter('slack');
+    reg.registerChannelAdapter('slack', { factory: () => mock });
+    await reg.initChannelAdapters(mockSetup);
+
+    const bridge = reg.createChannelDeliveryAdapter();
+    await bridge.deliver(
+      'slack',
+      'slack:C1',
+      null,
+      'chat',
+      JSON.stringify({ text: 'hi' }),
+      undefined,
+      'slack',
+      'meal-planner',
+    );
+    expect(mock.delivered).toHaveLength(1);
+    expect(mock.delivered[0].senderName).toBe('meal-planner');
+  });
 });
 
 describe('channel + router integration', () => {

@@ -290,6 +290,26 @@ describe('deliverSessionMessages — instance resolution', () => {
   });
 });
 
+describe('deliverSessionMessages — sender identity', () => {
+  it('passes the agent group name as senderName for a normal channel message', async () => {
+    seedAgentAndChannel();
+    const { session } = resolveSession('ag-1', 'mg-1', null, 'shared');
+    insertOutbound('ag-1', session.id, 'out-sender');
+
+    const senderNames: Array<string | undefined> = [];
+    setDeliveryAdapter({
+      async deliver(_ct, _pid, _tid, _kind, _content, _files, _instance, senderName) {
+        senderNames.push(senderName);
+        return 'plat-sender';
+      },
+    });
+
+    await deliverSessionMessages(session);
+    // seedAgentAndChannel creates agent group 'ag-1' with name 'Test Agent'.
+    expect(senderNames).toEqual(['Test Agent']);
+  });
+});
+
 describe('deliverSessionMessages — permission check', () => {
   it('rejects delivery to an unauthorized channel destination', async () => {
     seedAgentAndChannel();

@@ -60,6 +60,9 @@ export interface ChannelDeliveryAdapter {
     /** Delivering adapter instance (defaults to channelType downstream).
      *  Host-internal only — containers never see instance. */
     instance?: string,
+    /** Display name of the agent group that produced this message. Surfaced as
+     *  the per-message sender identity on channels that support it (Slack). */
+    senderName?: string,
   ): Promise<string | undefined>;
   setTyping?(channelType: string, platformId: string, threadId: string | null, instance?: string): Promise<void>;
 }
@@ -367,6 +370,10 @@ async function deliverMessage(
       ? readOutboxFiles(session.agent_group_id, session.id, msg.id, content.files as string[])
       : undefined;
 
+  // Agent group display name → per-message sender identity (Slack surfaces it
+  // as the bot username, e.g. "NanoClaw [meal-planner]"; other channels ignore).
+  const senderName = getAgentGroup(session.agent_group_id)?.name;
+
   const platformMsgId = await deliveryAdapter.deliver(
     msg.channel_type,
     msg.platform_id,
@@ -375,6 +382,7 @@ async function deliverMessage(
     msg.content,
     files,
     deliverInstance,
+    senderName,
   );
   log.info('Message delivered', {
     id: msg.id,

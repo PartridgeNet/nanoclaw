@@ -350,3 +350,76 @@ describe('createChatSdkBridge.deliver — display cards (send_card)', () => {
     expect(msg.markdown).toBe('plain hello');
   });
 });
+
+describe('createChatSdkBridge.deliver — senderNameFormat (per-message sender identity)', () => {
+  // When a channel opts in via senderNameFormat AND the host supplies the agent
+  // group name (message.senderName), the bridge stamps a `username` on the
+  // postMessage payload. The patched @chat-adapter/slack forwards it to
+  // chat.postMessage; adapters without the patch ignore the extra field.
+
+  it('stamps username on the text payload from the formatted agent name', async () => {
+    const { calls, postMessage } = makePostCapture();
+    const bridge = createChatSdkBridge({
+      adapter: stubAdapter({ postMessage }),
+      supportsThreads: false,
+      senderNameFormat: (name) => `NanoClaw [${name}]`,
+    });
+    await bridge.deliver('slack:C1', 'slack:T1', {
+      kind: 'chat-sdk',
+      content: { markdown: 'hello from the planner' },
+      senderName: 'meal-planner',
+    });
+    expect(calls).toHaveLength(1);
+    const msg = calls[0].message as { markdown?: string; username?: string };
+    expect(msg.markdown).toBe('hello from the planner');
+    expect(msg.username).toBe('NanoClaw [meal-planner]');
+  });
+
+  it('stamps username on the display-card payload', async () => {
+    const { calls, postMessage } = makePostCapture();
+    const bridge = createChatSdkBridge({
+      adapter: stubAdapter({ postMessage }),
+      supportsThreads: false,
+      senderNameFormat: (name) => `NanoClaw [${name}]`,
+    });
+    await bridge.deliver('slack:C1', 'slack:T1', {
+      kind: 'chat-sdk',
+      content: { type: 'card', card: { title: 'Daily', description: 'today' }, fallbackText: 'Daily' },
+      senderName: 'meal-planner',
+    });
+    expect(calls).toHaveLength(1);
+    const msg = calls[0].message as { card?: unknown; username?: string };
+    expect(msg.card).toBeDefined();
+    expect(msg.username).toBe('NanoClaw [meal-planner]');
+  });
+
+  it('omits username when no formatter is configured (other channels unaffected)', async () => {
+    const { calls, postMessage } = makePostCapture();
+    const bridge = createChatSdkBridge({
+      adapter: stubAdapter({ postMessage }),
+      supportsThreads: false,
+    });
+    await bridge.deliver('telegram:42', null, {
+      kind: 'chat-sdk',
+      content: { markdown: 'plain hello' },
+      senderName: 'meal-planner',
+    });
+    expect(calls).toHaveLength(1);
+    expect('username' in (calls[0].message as object)).toBe(false);
+  });
+
+  it('omits username when the host supplies no senderName', async () => {
+    const { calls, postMessage } = makePostCapture();
+    const bridge = createChatSdkBridge({
+      adapter: stubAdapter({ postMessage }),
+      supportsThreads: false,
+      senderNameFormat: (name) => `NanoClaw [${name}]`,
+    });
+    await bridge.deliver('slack:C1', 'slack:T1', {
+      kind: 'chat-sdk',
+      content: { markdown: 'no sender supplied' },
+    });
+    expect(calls).toHaveLength(1);
+    expect('username' in (calls[0].message as object)).toBe(false);
+  });
+});

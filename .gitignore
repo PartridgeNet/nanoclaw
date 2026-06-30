@@ -24,6 +24,9 @@ groups/*
 *.keys.json
 .env
 .env*
+classcharts-exported-session.json
+*-exported-session.json
+classcharts-token.txt
 
 # Temp files
 .tmp-*

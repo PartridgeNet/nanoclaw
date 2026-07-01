@@ -31,6 +31,9 @@ classcharts-token.txt
 # Temp files
 .tmp-*
 
+# Agent worktrees (linked git worktrees created for isolated agent runs)
+.claude/worktrees/
+
 # OS
 .DS_Store
 

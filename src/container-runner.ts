@@ -515,7 +515,17 @@ async function buildContainerArgs(
   const imageTag = containerConfig.imageTag || CONTAINER_IMAGE;
   args.push(imageTag);
 
-  args.push('-c', 'exec bun run /app/src/index.ts');
+  // Git needs two env vars that can't be set as static docker -e flags:
+  //   GIT_SSL_CAINFO — must expand $SSL_CERT_FILE at container startup (OneCLI
+  //     injects SSL_CERT_FILE pointing at the combined CA bundle; git ignores it
+  //     unless GIT_SSL_CAINFO is explicitly set).
+  //   http.proxyAuthMethod=basic — git/libcurl won't preemptively send
+  //     Proxy-Authorization on CONNECT unless this is set, so the gateway can't
+  //     inject credentials and git sees a 401 even though curl/node succeed.
+  // Both are set here via shell expansion before exec so all child processes
+  // (git, cargo, etc.) inherit them. GIT_CONFIG_COUNT is the env-based git-config
+  // injection mechanism (git ≥ 2.32); it doesn't write any file.
+  args.push('-c', 'export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.proxyAuthMethod GIT_CONFIG_VALUE_0=basic; [ -n "$SSL_CERT_FILE" ] && export GIT_SSL_CAINFO="$SSL_CERT_FILE"; exec bun run /app/src/index.ts');
 
   return args;
 }

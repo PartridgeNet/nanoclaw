@@ -36,6 +36,29 @@ import {
 const TURN_TIMEOUT_MS = Number(process.env.CODEX_TURN_TIMEOUT_MS) || 25 * 60 * 1000;
 const SUPPORTED_EFFORTS = new Set<CodexReasoningEffort>(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
 
+/**
+ * Message reported to the user when a turn hits the per-turn time cap. Codex can't be
+ * warned mid-turn and resumed, so instead of discarding everything and surfacing a bare
+ * "Turn timed out" error, we report whatever the agent had said so far (its accumulated
+ * agentMessage deltas) plus a clear note so a silent long death becomes actionable
+ * partial progress the user can continue from.
+ */
+export function buildTurnTimeoutMessage(timeoutMs: number, partial: string): string {
+  const minutes = Math.round(timeoutMs / 60_000);
+  const trimmed = partial.trim();
+  if (trimmed) {
+    return (
+      `${trimmed}\n\n` +
+      `_⏱️ I hit the ${minutes}-minute per-turn limit and stopped here — ask me to continue if this looks incomplete._`
+    );
+  }
+  return (
+    `⏱️ I hit the ${minutes}-minute per-turn limit before I could finish, and don't have partial output to show. ` +
+    `This task was too long for a single turn — ask me to continue, or break it into smaller steps. ` +
+    `Avoid having me wait on long external jobs (like a CI build) within one turn.`
+  );
+}
+
 export interface CodexRuntimeDeps {
   writeCodexConfigToml: typeof writeCodexConfigToml;
   spawnCodexAppServer: typeof spawnCodexAppServer;
@@ -240,6 +263,7 @@ async function* runOneTurn(
   const state: { error: Error | null } = { error: null };
   let resultText = '';
   let turnDone = false;
+  let timedOut = false;
   let turnId: string | null = null;
 
   // A finished turn can no longer absorb steered input: codex's turn/steer
@@ -340,7 +364,10 @@ async function* runOneTurn(
   server.exitHandlers.push(onServerExit);
 
   const timer = setTimeout(() => {
-    state.error = new Error(`Turn timed out after ${TURN_TIMEOUT_MS}ms`);
+    // Report partial progress rather than discarding it with a bare error (see
+    // buildTurnTimeoutMessage). Don't set state.error — the drain below turns this
+    // into a normal result so the user gets what the agent managed to say.
+    timedOut = true;
     finishTurn();
     kick();
   }, TURN_TIMEOUT_MS);
@@ -385,6 +412,13 @@ async function* runOneTurn(
         classification: classifyError(state.error.message),
       };
       throw state.error;
+    }
+
+    // Turn hit the time cap: surface partial progress as a normal result instead of a
+    // bare error. The codex thread persists server-side, so the user can just continue.
+    if (timedOut) {
+      yield { type: 'result', text: buildTurnTimeoutMessage(TURN_TIMEOUT_MS, resultText) };
+      return;
     }
 
     for (const imagePath of listGeneratedImages(threadId)) {

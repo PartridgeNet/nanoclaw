@@ -70,9 +70,20 @@ export async function handleAddMcpServer(content: Record<string, unknown>, sessi
     return;
   }
   const serverName = content.name as string;
-  const command = content.command as string;
-  if (!serverName || !command) {
-    notifyAgent(session, 'add_mcp_server failed: name and command are required.');
+  const command = content.command as string | undefined;
+  const url = content.url as string | undefined;
+  if (!serverName) {
+    notifyAgent(session, 'add_mcp_server failed: name is required.');
+    return;
+  }
+  // A `url` payload is a remote streamable-HTTP server (no command to spawn);
+  // otherwise it's a local stdio server. Mirror the shape apply.ts expects.
+  if (!command && !url) {
+    notifyAgent(session, 'add_mcp_server failed: either command (local stdio) or url (remote HTTP) is required.');
+    return;
+  }
+  if (command && url) {
+    notifyAgent(session, 'add_mcp_server failed: provide either command or url, not both.');
     return;
   }
   await requestApproval({
@@ -81,11 +92,19 @@ export async function handleAddMcpServer(content: Record<string, unknown>, sessi
     action: 'add_mcp_server',
     payload: {
       name: serverName,
-      command,
-      args: (content.args as string[]) || [],
-      env: (content.env as Record<string, string>) || {},
+      ...(url
+        ? {
+            url,
+            bearer_token_env_var: (content.bearer_token_env_var as string) || undefined,
+            http_headers: (content.http_headers as Record<string, string>) || undefined,
+          }
+        : {
+            command,
+            args: (content.args as string[]) || [],
+            env: (content.env as Record<string, string>) || {},
+          }),
     },
     title: 'Add MCP Request',
-    question: `Agent "${agentGroup.name}" is attempting to add a new MCP server:\n${serverName} (${command})`,
+    question: `Agent "${agentGroup.name}" is attempting to add a new MCP server:\n${serverName} (${url ?? command})`,
   });
 }

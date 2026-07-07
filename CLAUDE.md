@@ -277,6 +277,7 @@ This project uses pnpm with `minimumReleaseAge: 4320` (3 days) in `pnpm-workspac
 | [docs/customizing.md](docs/customizing.md) | Short intro to customizing via skills |
 | [docs/skills-model.md](docs/skills-model.md) | The skills model in full: recipes, tests, upgrades, migrations |
 | [docs/skill-guidelines.md](docs/skill-guidelines.md) | Authoritative checklist for writing a skill |
+| [docs/whatsapp-rs-assistant-plan.md](docs/whatsapp-rs-assistant-plan.md) | **PartridgeNet:** rs-assistant's WhatsApp bridge (repo `PartridgeNet/whatsapp-bridge`, on the Debian server, reached via OneCLI) — architecture, deploy gotchas, and the time-boxed per-contact send-authorization model |
 
 ## Container Build Cache
 

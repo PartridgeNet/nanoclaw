@@ -22,8 +22,7 @@ import {
   TIMEZONE,
 } from './config.js';
 import { materializeContainerJson } from './container-config.js';
-import { getContainerConfig } from './db/container-configs.js';
-import { updateContainerConfigScalars } from './db/container-configs.js';
+import { ensureContainerConfig, getContainerConfig, updateContainerConfigScalars } from './db/container-configs.js';
 import { CONTAINER_RUNTIME_BIN, hostGatewayArgs, readonlyMountArgs, stopContainer } from './container-runtime.js';
 import { EGRESS_NETWORK, egressNetworkArgs, ensureEgressNetwork } from './egress-lockdown.js';
 import { composeGroupClaudeMd } from './claude-md-compose.js';
@@ -124,6 +123,12 @@ async function spawnContainer(session: Session): Promise<void> {
     writeDestinations(agentGroup.id, session.id);
   }
   writeSessionRouting(agentGroup.id, session.id);
+
+  // Ensure a container_configs row exists before materializing. Groups
+  // created before the container_configs table (or before backfill ran)
+  // have no row; ensureContainerConfig seeds defaults so the read below
+  // succeeds rather than throwing "Container config not found".
+  ensureContainerConfig(agentGroup.id);
 
   // Materialize container.json from DB — writes fresh file and returns
   // the config object, threaded through provider resolution, buildMounts,
@@ -505,6 +510,16 @@ async function buildContainerArgs(
   const onecliApplied = await onecli.applyContainerConfig(args, { addHostMapping: false, agent: agentIdentifier });
   if (!onecliApplied) {
     throw new Error('OneCLI gateway not applied — refusing to spawn container without credentials');
+  }
+  // OneCLI mounts credential stubs as :ro. The codex binary writes back a
+  // refreshed session token to auth.json after each successful auth — with :ro
+  // that fails with EROFS (os error 30). Demote auth.json stubs to :rw so the
+  // write succeeds. OneCLI overwrites the stub fresh each spawn via
+  // writeFileSync, so the container's write never persists across sessions.
+  for (let i = 0; i < args.length - 1; i++) {
+    if (args[i] === '-v' && args[i + 1]?.endsWith('auth.json:ro')) {
+      args[i + 1] = args[i + 1].replace(/:ro$/, ':rw');
+    }
   }
   log.info('OneCLI gateway applied', { containerName });
 

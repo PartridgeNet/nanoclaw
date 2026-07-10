@@ -23,6 +23,7 @@ export interface ContainerConfigRow {
   mcp_servers: string; // JSON: Record<string, McpServerConfig>
   packages_apt: string; // JSON: string[]
   packages_npm: string; // JSON: string[]
+  packages_script: string | null; // shell script injected as Dockerfile RUN heredoc after apt/npm layers
   additional_mounts: string; // JSON: AdditionalMountConfig[]
   cli_scope: string; // 'disabled' | 'group' | 'global'
   updated_at: string;

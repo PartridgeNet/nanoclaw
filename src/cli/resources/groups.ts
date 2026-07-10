@@ -26,6 +26,7 @@ function presentConfig(row: ContainerConfigRow): Record<string, unknown> {
     mcp_servers: JSON.parse(row.mcp_servers),
     packages_apt: JSON.parse(row.packages_apt),
     packages_npm: JSON.parse(row.packages_npm),
+    packages_script: row.packages_script ?? null,
     additional_mounts: JSON.parse(row.additional_mounts),
     cli_scope: row.cli_scope,
     updated_at: row.updated_at,
@@ -213,7 +214,7 @@ registerResource({
       access: 'approval',
       description:
         'Update container config scalar fields. Changes are saved but do NOT take effect until you run `ncl groups restart`. ' +
-        'Use --id <group-id> and any of: --provider, --model, --effort, --image-tag, --assistant-name, --max-messages-per-prompt, --cli-scope.',
+        'Use --id <group-id> and any of: --provider, --model, --effort, --image-tag, --assistant-name, --max-messages-per-prompt, --cli-scope, --packages-script.',
       handler: async (args) => {
         const id = args.id as string;
         if (!id) throw new Error('--id is required');
@@ -223,7 +224,14 @@ registerResource({
         const updates: Partial<
           Pick<
             ContainerConfigRow,
-            'provider' | 'model' | 'effort' | 'image_tag' | 'assistant_name' | 'max_messages_per_prompt' | 'cli_scope'
+            | 'provider'
+            | 'model'
+            | 'effort'
+            | 'image_tag'
+            | 'assistant_name'
+            | 'max_messages_per_prompt'
+            | 'cli_scope'
+            | 'packages_script'
           >
         > = {};
         if (args.provider !== undefined) updates.provider = args.provider as string;
@@ -240,10 +248,13 @@ registerResource({
           }
           updates.cli_scope = scope;
         }
+        if (args['packages-script'] !== undefined || args.packages_script !== undefined) {
+          updates.packages_script = ((args['packages-script'] ?? args.packages_script) as string) || null;
+        }
 
         if (Object.keys(updates).length === 0) {
           throw new Error(
-            'Nothing to update — provide at least one of: --provider, --model, --effort, --image-tag, --assistant-name, --max-messages-per-prompt, --cli-scope',
+            'Nothing to update — provide at least one of: --provider, --model, --effort, --image-tag, --assistant-name, --max-messages-per-prompt, --cli-scope, --packages-script',
           );
         }
 

@@ -557,11 +557,13 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
   if (!configRow) throw new Error('Container config not found');
   const aptPackages = JSON.parse(configRow.packages_apt) as string[];
   const npmPackages = JSON.parse(configRow.packages_npm) as string[];
-  if (aptPackages.length === 0 && npmPackages.length === 0) {
+  const packagesScript = configRow.packages_script ?? null;
+  if (aptPackages.length === 0 && npmPackages.length === 0 && !packagesScript) {
     throw new Error('No packages to install. Use install_packages first.');
   }
 
-  let dockerfile = `FROM ${CONTAINER_IMAGE}\nUSER root\n`;
+  // Heredoc RUN syntax requires dockerfile:1.7+.
+  let dockerfile = `# syntax=docker/dockerfile:1.7\nFROM ${CONTAINER_IMAGE}\nUSER root\n`;
   if (aptPackages.length > 0) {
     dockerfile += `RUN apt-get update && apt-get install -y ${aptPackages.join(' ')} && rm -rf /var/lib/apt/lists/*\n`;
   }
@@ -572,6 +574,10 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
     // install silently broken.
     const allowlist = npmPackages.map((p) => `echo 'only-built-dependencies[]=${p}' >> /root/.npmrc`).join(' && ');
     dockerfile += `RUN ${allowlist} && pnpm install -g ${npmPackages.join(' ')}\n`;
+  }
+  if (packagesScript) {
+    // Heredoc form handles multi-line scripts cleanly without escaping.
+    dockerfile += `RUN <<'__PKGSCRIPT__'\n${packagesScript}\n__PKGSCRIPT__\n`;
   }
   dockerfile += 'USER node\n';
 

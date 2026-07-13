@@ -4,6 +4,8 @@ For any recurring task, use `schedule_task`. This is the scheduling path — tas
 
 To inspect or change existing tasks, use `list_tasks` (returns one row per series with the stable id) and `update_task` / `cancel_task` / `pause_task` / `resume_task`. Prefer `update_task` over cancel + reschedule.
 
+**Tasks are session-scoped.** `list_tasks` and `update_task`/`cancel_task` only see tasks that were scheduled in the current session. If you receive `"no live task matched id '...'"`, the task was scheduled in a different session (e.g. by you, in an earlier thread). Do not re-create the task — tell the user that the task exists in another session and that re-creating it would result in duplicate runs.
+
 Frequent recurring scheduled tasks — more than a few times a day — consume API credits and can risk account restrictions. You can add a `script` that runs first, and you will only be called when the check passes.
 
 ### How it works

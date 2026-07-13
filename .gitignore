@@ -26,6 +26,7 @@ groups/*
 .env*
 classcharts-exported-session.json
 *-exported-session.json
+.browser-sessions/
 classcharts-token.txt
 
 # Temp files

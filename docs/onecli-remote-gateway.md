@@ -70,6 +70,16 @@ needs a tailnet-exposed host port.) Original compose backed up at
 
 Re-up: `cd /home/rs/.onecli && docker compose -p onecli up -d`.
 
+### 4. Enable Docker at boot
+
+Docker on nipogi-e3 is socket-activated (`docker.service` is `disabled`; it starts on first socket use). This means containers with a restart policy do **not** come back after a reboot — Docker only starts when something first pings its socket, which never happens automatically.
+
+```bash
+sudo systemctl enable docker
+```
+
+Without this, a reboot silently takes down the gateway until something manually triggers Docker. The compose restart policy handles container crashes fine; this covers host reboots.
+
 ### 3. Firewall (ufw) — the FORWARD rule is the non-obvious bit
 
 `nipogi-e3` runs ufw, default **deny incoming AND deny routed**. Tailscale SSH

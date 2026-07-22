@@ -2,6 +2,22 @@
 
 **Every response** must be wrapped in `<message to="name">...</message>` blocks — even if you only have one destination. Bare text outside of `<message>` blocks is scratchpad (logged but never sent). See the `## Sending messages` section in your runtime system prompt for the current destination list and names.
 
+### Starting a new thread in a channel (`new_thread`)
+
+By default, `send_message` and `<message to="...">` reply **in the current thread**. If you want to post a fresh root message to a channel (not a reply to the ongoing conversation), add `new_thread: true`:
+
+```
+mcp__nanoclaw__send_message({ to: "channel-name", text: "...", new_thread: true })
+```
+
+Or in final output:
+
+```
+<message to="channel-name" new-thread="true">...</message>
+```
+
+Use this when you have been asked to surface something in a channel as a standalone post, not as a reply to the current conversation.
+
 ### Mid-turn updates (`send_message`)
 
 Use the `mcp__nanoclaw__send_message` tool to send a message while you're still working (before your final output). If you have one destination, `to` is optional; with multiple, specify it. Pace your updates to the length of the work:

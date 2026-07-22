@@ -201,9 +201,11 @@ export interface RoutableAgentMessage {
  *    me, which target session was driving? Route the reply there, since
  *    that's the session most plausibly in active conversation.
  *
- * 3. **Newest active session**: legacy heuristic. Used when no prior a2a
- *    has been recorded with `source_session_id` (e.g. fresh installs,
- *    pre-migration data).
+ * 3. **Fresh per-source-session isolation**: when there is no prior a2a
+ *    history at all, create (or find) a dedicated session keyed to this
+ *    specific source session (`thread_id = 'a2a:<sourceSession.id>'`).
+ *    This prevents new delegations from landing in an unrelated channel
+ *    session just because it happened to be the most recently active one.
  */
 function resolveTargetSession(msg: RoutableAgentMessage, sourceSession: Session, targetAgentGroupId: string): Session {
   const srcDb = openInboundDb(sourceSession.agent_group_id, sourceSession.id);
@@ -227,7 +229,11 @@ function resolveTargetSession(msg: RoutableAgentMessage, sourceSession: Session,
       return candidate;
     }
   }
-  return resolveSession(targetAgentGroupId, null, null, 'agent-shared').session;
+  // No peer history — create an isolated session keyed to this source session.
+  // Using the source session ID as thread_id keeps separate inbound delegations
+  // in separate target sessions, and avoids hijacking an existing channel session
+  // just because it happens to be the most recently active one.
+  return resolveSession(targetAgentGroupId, null, `a2a:${sourceSession.id}`, 'per-thread').session;
 }
 
 export async function routeAgentMessage(msg: RoutableAgentMessage, session: Session): Promise<void> {

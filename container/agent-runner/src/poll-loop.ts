@@ -59,6 +59,21 @@ function generateId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Map a raw provider error message to a user-facing string. Known failure
+ * modes (auth, quota) get a friendly explanation; everything else falls back
+ * to the raw message so the user has something actionable.
+ */
+function classifyQueryError(msg: string): string {
+  if (/auth|api.?key|unauthorized|login|credential|401/i.test(msg)) {
+    return "I'm having trouble authenticating — my credentials may have expired. Please ask an admin to refresh them.";
+  }
+  if (/quota|rate.?limit|insufficient|billing|credit/i.test(msg)) {
+    return "I've hit a usage limit or billing issue and can't complete the request right now.";
+  }
+  return `Error: ${msg}`;
+}
+
 export interface PollLoopConfig {
   provider: AgentProvider;
   /**
@@ -273,14 +288,17 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
         clearContinuation(config.providerName);
       }
 
-      // Write error response so the user knows something went wrong
+      // Write error response so the user knows something went wrong.
+      // Classify the error so known failure modes get a friendly message
+      // instead of raw SDK internals (e.g. "Reconnecting... 2/5: 401 Unauthorized").
+      const userText = classifyQueryError(errMsg);
       writeMessageOut({
         id: generateId(),
         kind: 'chat',
         platform_id: routing.platformId,
         channel_type: routing.channelType,
         thread_id: routing.threadId,
-        content: JSON.stringify({ text: `Error: ${errMsg}` }),
+        content: JSON.stringify({ text: userText }),
       });
     } finally {
       clearCurrentInReplyTo();
@@ -632,7 +650,8 @@ function deliverErrorResult(text: string, routing: RoutingContext): void {
  * blocks, even with a single destination. Bare text is scratchpad only.
  */
 function dispatchResultText(text: string, routing: RoutingContext): { sent: number; hasUnwrapped: boolean } {
-  const MESSAGE_RE = /<message\s+to="([^"]+)"\s*>([\s\S]*?)<\/message>/g;
+  // Captures: (1) to="name" (2) optional extra attrs like new-thread="true" (3) body
+  const MESSAGE_RE = /<message\s+to="([^"]+)"([^>]*)>([\s\S]*?)<\/message>/g;
 
   let match: RegExpExecArray | null;
   let sent = 0;
@@ -644,7 +663,8 @@ function dispatchResultText(text: string, routing: RoutingContext): { sent: numb
       scratchpadParts.push(text.slice(lastIndex, match.index));
     }
     const toName = match[1];
-    const body = match[2].trim();
+    const attrs = match[2];
+    const body = match[3].trim();
     lastIndex = MESSAGE_RE.lastIndex;
 
     const dest = findByName(toName);
@@ -653,7 +673,8 @@ function dispatchResultText(text: string, routing: RoutingContext): { sent: numb
       scratchpadParts.push(`[dropped: unknown destination "${toName}"] ${body}`);
       continue;
     }
-    sendToDestination(dest, body, routing);
+    const newThread = /new-thread\s*=\s*"true"/.test(attrs);
+    sendToDestination(dest, body, routing, newThread);
     sent++;
   }
   if (lastIndex < text.length) {
@@ -673,7 +694,12 @@ function dispatchResultText(text: string, routing: RoutingContext): { sent: numb
   return { sent, hasUnwrapped };
 }
 
-function sendToDestination(dest: DestinationEntry, body: string, routing: RoutingContext): void {
+function sendToDestination(
+  dest: DestinationEntry,
+  body: string,
+  routing: RoutingContext,
+  newThread = false,
+): void {
   const platformId = dest.type === 'channel' ? dest.platformId! : dest.agentGroupId!;
   const channelType = dest.type === 'channel' ? dest.channelType! : 'agent';
   // Task fires: an explicitly-addressed final-text block is either the echo of
@@ -689,7 +715,8 @@ function sendToDestination(dest: DestinationEntry, body: string, routing: Routin
   // that came from this same channel+platform. In agent-shared sessions,
   // different destinations have different thread contexts — using a single
   // routing.threadId would stamp one channel's thread onto another.
-  const destRouting = resolveDestinationThread(channelType, platformId);
+  // newThread=true skips this and posts as a root message instead.
+  const destRouting = newThread ? null : resolveDestinationThread(channelType, platformId);
   writeMessageOut({
     id: generateId(),
     in_reply_to: destRouting?.inReplyTo ?? (routing.taskFire ? null : routing.inReplyTo),

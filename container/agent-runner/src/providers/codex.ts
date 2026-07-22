@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import { memoryContextForSessionStart, type MemorySessionHookRegistration } from '../memory/session-hook.js';
 import { registerProvider } from './provider-registry.js';
 import type {
   AgentProvider,
@@ -100,10 +101,16 @@ function normalizeEffort(effort: string | undefined): CodexReasoningEffort | und
   return normalized as CodexReasoningEffort;
 }
 
+function joinInstructions(parts: Array<string | undefined>): string | undefined {
+  const joined = parts.filter((part): part is string => !!part && part.trim().length > 0).join('\n\n');
+  return joined || undefined;
+}
+
 export class CodexProvider implements AgentProvider {
   readonly supportsNativeSlashCommands = false;
-  // Codex has no native NanoClaw memory — opt in to the runner's persistent
-  // memory/ scaffold (see memory-scaffold.ts).
+  // Codex has no filesystem-backed native memory hook. The runner keeps the
+  // shared memory scaffold, and this provider injects it into new threads'
+  // base instructions from registerMemorySessionHook().
   readonly usesMemoryScaffold = true;
   // The app-server keeps history server-side; there is no on-disk transcript,
   // so the provider persists each exchange itself into `conversations/`
@@ -123,6 +130,7 @@ export class CodexProvider implements AgentProvider {
   private readonly model?: string;
   private readonly effort?: CodexReasoningEffort;
   private readonly runtime: CodexRuntimeDeps;
+  private memorySessionHook?: MemorySessionHookRegistration;
 
   constructor(options: ProviderOptions = {}, runtime: CodexRuntimeDeps = defaultCodexRuntimeDeps) {
     this.mcpServers = options.mcpServers ?? {};
@@ -134,6 +142,10 @@ export class CodexProvider implements AgentProvider {
   isSessionInvalid(err: unknown): boolean {
     const msg = err instanceof Error ? err.message : String(err);
     return STALE_THREAD_RE.test(msg);
+  }
+
+  registerMemorySessionHook(hook: MemorySessionHookRegistration): void {
+    this.memorySessionHook = hook;
   }
 
   query(input: QueryInput): AgentQuery {
@@ -176,10 +188,13 @@ export class CodexProvider implements AgentProvider {
 
       try {
         await self.runtime.initializeCodexAppServer(server);
+        const memoryContext = self.memorySessionHook
+          ? memoryContextForSessionStart(threadId ? 'resume' : 'startup', input.cwd)
+          : undefined;
         threadId = await self.runtime.startOrResumeCodexThread(server, threadId, {
           model: self.model,
           cwd: input.cwd,
-          baseInstructions: input.systemContext?.instructions,
+          baseInstructions: joinInstructions([input.systemContext?.instructions, memoryContext]),
         });
         activeThreadId = threadId;
 

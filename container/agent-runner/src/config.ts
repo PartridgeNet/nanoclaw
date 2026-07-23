@@ -18,9 +18,9 @@ export interface RunnerConfig {
   mcpServers: Record<
     string,
     {
-      command: string;
-      args: string[];
-      env: Record<string, string>;
+      command?: string;
+      args?: string[];
+      env?: Record<string, string>;
       url?: string;
       bearer_token_env_var?: string;
       http_headers?: Record<string, string>;

@@ -143,7 +143,7 @@ fi
 if [[ "$SKIP_CONTAINER_BUILD" != true ]]; then
   need "$CONTAINER_RUNTIME"
   log "Checking $CONTAINER_RUNTIME access"
-  "$CONTAINER_RUNTIME" info >/dev/null
+  "$CONTAINER_RUNTIME" info >/dev/null 2>&1 || die "$CONTAINER_RUNTIME not responding — is Docker Desktop running?"
 fi
 
 if [[ ! -f package.json || ! -d scripts || ! -f setup/lib/restart.sh || ! -f container/build.sh ]]; then

@@ -188,6 +188,7 @@ if [[ "$SKIP_BACKUP" != true ]]; then
     tar \
       --exclude='data/ncl.sock' \
       --exclude='data/cli.sock' \
+      --exclude='groups/*/.postgres/*.s.PGSQL.*' \
       --exclude='data/v2-sessions/*/inbound.db-shm' \
       --exclude='data/v2-sessions/*/inbound.db-wal' \
       --exclude='data/v2-sessions/*/outbound.db-shm' \

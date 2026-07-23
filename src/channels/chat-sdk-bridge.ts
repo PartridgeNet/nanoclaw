@@ -344,6 +344,31 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
         setupConfig.onAction(questionId, selectedOption, userId);
       });
 
+      // Inbound emoji reactions — forward as synthetic chat messages so agents
+      // can act on them (e.g. emoji triage commands). Only additions are
+      // forwarded; removals are silently ignored. The `isMention: true` flag
+      // ensures routing engages the agent even on unsubscribed threads.
+      chat.onReaction(async (event) => {
+        if (!event.added) return;
+        const channelId = adapter.channelIdFromThreadId(event.threadId);
+        await setupConfig.onInbound(channelId, event.threadId, {
+          id: `reaction-${event.messageId}-${event.rawEmoji}`,
+          kind: 'chat-sdk',
+          content: {
+            type: 'reaction',
+            text: `:${event.rawEmoji}:`,
+            rawEmoji: event.rawEmoji,
+            reactedToMessageId: event.messageId,
+            senderId: event.user.userId,
+            sender: event.user.userName ?? event.user.userId,
+            senderName: event.user.userName ?? event.user.userId,
+          },
+          timestamp: new Date().toISOString(),
+          isMention: true,
+          isGroup: true,
+        });
+      });
+
       await chat.initialize();
 
       // Start Gateway listener for adapters that support it (e.g., Discord)

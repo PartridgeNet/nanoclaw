@@ -570,8 +570,7 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
     throw new Error('No packages to install. Use install_packages first.');
   }
 
-  // Heredoc RUN syntax requires dockerfile:1.7+.
-  let dockerfile = `# syntax=docker/dockerfile:1.7\nFROM ${CONTAINER_IMAGE}\nUSER root\n`;
+  let dockerfile = `FROM ${CONTAINER_IMAGE}\nUSER root\n`;
   if (aptPackages.length > 0) {
     dockerfile += `RUN apt-get update && apt-get install -y ${aptPackages.join(' ')} && rm -rf /var/lib/apt/lists/*\n`;
   }

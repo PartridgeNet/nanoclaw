@@ -419,8 +419,8 @@ describe('poll loop — provider error recovery', () => {
 
     const out = getUndeliveredMessages();
     expect(out).toHaveLength(1);
-    expect(JSON.parse(out[0].content).text).toContain('Error:');
-    expect(JSON.parse(out[0].content).text).toContain('API rate limit exceeded');
+    expect(JSON.parse(out[0].content).text).toContain('usage limit or billing issue');
+    expect(JSON.parse(out[0].content).text).not.toContain('API rate limit exceeded');
 
     // Input message should be marked completed despite the error
     const pending = getPendingMessages();

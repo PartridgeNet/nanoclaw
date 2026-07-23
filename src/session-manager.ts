@@ -99,6 +99,11 @@ export function resolveSession(
     if (existing) {
       return { session: existing, created: false };
     }
+  } else if (sessionMode === 'per-thread' && threadId) {
+    const existing = findSystemSession(agentGroupId, threadId);
+    if (existing) {
+      return { session: existing, created: false };
+    }
   }
 
   const id = generateId();

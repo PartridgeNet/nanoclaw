@@ -79,6 +79,13 @@ export const sendMessage: McpToolDefinition = {
           description: 'Destination name (e.g., "family", "worker-1").',
         },
         text: { type: 'string', description: 'Message content' },
+        new_thread: {
+          type: 'boolean',
+          description:
+            'Post as a new root message instead of replying in the current thread. ' +
+            'Use this when you want to start a fresh conversation in a channel ' +
+            'rather than continue the existing thread.',
+        },
       },
       required: ['to', 'text'],
     },
@@ -95,15 +102,15 @@ export const sendMessage: McpToolDefinition = {
     const id = generateId();
     const seq = writeMessageOut({
       id,
-      in_reply_to: getCurrentInReplyTo(),
+      in_reply_to: args.new_thread ? null : getCurrentInReplyTo(),
       kind: 'chat',
       platform_id: routing.platform_id,
       channel_type: routing.channel_type,
-      thread_id: routing.thread_id,
+      thread_id: args.new_thread ? null : routing.thread_id,
       content: JSON.stringify({ text }),
     });
 
-    log(`send_message: #${seq} → ${routing.resolvedName}`);
+    log(`send_message: #${seq} → ${routing.resolvedName}${args.new_thread ? ' (new thread)' : ''}`);
     return ok(`Message sent to ${routing.resolvedName} (id: ${seq})`);
   },
 };

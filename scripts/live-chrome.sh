@@ -105,43 +105,17 @@ if [[ -f "$LS_FILE" ]]; then
   ' "$LS_FILE" || echo "  (profile naming skipped)"
 fi
 
-# Put the agent name in the macOS window title bar. Two parts, both generated
-# fresh each launch so the name stays current:
-#  1. A tiny unpacked extension whose content script prefixes every page's
-#     <title> with "[<group>] " (survives navigation) — shows in the title bar,
-#     Mission Control and the Window menu.
-#  2. A titled home page, used as the default start URL, so an idle window still
-#     reads "[<group>]" (content scripts can't inject on chrome:// / new tab).
-EXT_DIR="$HOME/.nanoclaw-live-chrome/$GROUP-title-ext"
+# Give an idle window the agent name in its macOS title bar via a titled home
+# page used as the default start URL — its <title> is "[<group>]".
+#
+# NOTE: prefixing the title of *navigated* pages would need a loaded extension,
+# but Chrome 150 ignores command-line extension loading (--load-extension /
+# --disable-extensions-except are both no-ops here), so that isn't possible.
+# Once the agent navigates away, the window title is the page's own title. The
+# always-visible per-window identifier is Chrome's profile button (the profile
+# is named after the group).
 HOME_HTML="$HOME/.nanoclaw-live-chrome/$GROUP-home.html"
-mkdir -p "$EXT_DIR"
-cat > "$EXT_DIR/manifest.json" <<EXT
-{
-  "manifest_version": 3,
-  "name": "nanoclaw-title-$GROUP",
-  "version": "1.0",
-  "content_scripts": [
-    { "matches": ["<all_urls>"], "run_at": "document_start", "js": ["title.js"] }
-  ]
-}
-EXT
-# The group name is injected as a JSON string literal so it is safely quoted.
-printf 'const TAG = %s + " ";\n' "$(node -e 'process.stdout.write(JSON.stringify("["+process.argv[1]+"]"))' "$GROUP")" > "$EXT_DIR/title.js"
-cat >> "$EXT_DIR/title.js" <<'JS'
-function apply() {
-  const t = document.title || "";
-  if (!t.startsWith(TAG)) document.title = TAG + t;
-}
-apply();
-const run = () => {
-  apply();
-  const titleEl = document.querySelector("title");
-  const target = titleEl || document.head || document.documentElement;
-  if (target) new MutationObserver(apply).observe(target, { childList: true, subtree: true });
-};
-if (document.head) run();
-else document.addEventListener("DOMContentLoaded", run, { once: true });
-JS
+mkdir -p "$(dirname "$HOME_HTML")"
 cat > "$HOME_HTML" <<HTML
 <!doctype html><html><head><meta charset="utf-8"><title>[$GROUP]</title></head>
 <body style="font:14px -apple-system,sans-serif;color:#666;padding:2rem">
@@ -164,5 +138,4 @@ exec "$CHROME" \
   --remote-allow-origins='*' \
   --no-first-run \
   --no-default-browser-check \
-  --load-extension="$EXT_DIR" \
   "$START_URL"

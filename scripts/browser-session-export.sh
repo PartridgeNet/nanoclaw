@@ -18,7 +18,7 @@
 #
 # CAVEAT: sites with strong bot detection (e.g. Tesco) block a fresh headless
 # browser even with a valid session. Those need the live-browser approach
-# (see scripts/tesco-chrome.sh), not session export.
+# (see scripts/live-chrome.sh), not session export.
 #
 # Usage:
 #   bash scripts/browser-session-export.sh <group> [name] [login-url]

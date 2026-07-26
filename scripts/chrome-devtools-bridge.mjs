@@ -1,32 +1,35 @@
 #!/usr/bin/env node
 /**
- * tesco-chrome-bridge — Host-header-rewriting reverse proxy for Chrome DevTools.
+ * chrome-devtools-bridge — Host-header-rewriting reverse proxy for Chrome DevTools.
  *
  * Why this exists:
- *   meal-planner runs in a Docker container and drives a dedicated Chrome on
- *   this Mac (the one logged into Tesco) over the Chrome DevTools Protocol via
- *   `chrome-devtools-mcp --browser-url`. Two Chrome protections block the
- *   container from connecting directly to `host.docker.internal:9222`:
+ *   A NanoClaw agent group runs in a Docker container and drives a dedicated
+ *   headed Chrome on this Mac (via `scripts/live-chrome.sh <group>`) over the
+ *   Chrome DevTools Protocol using `chrome-devtools-mcp --browserUrl`. Two
+ *   Chrome protections block the container from connecting directly to
+ *   `host.docker.internal:<chrome-port>`:
  *     1. Chrome binds --remote-debugging-port to 127.0.0.1 only. On Docker
  *        Desktop for Mac, container traffic to `host.docker.internal` IS
  *        delivered to the host loopback, so reachability is fine — but:
  *     2. Chrome's DNS-rebinding protection rejects any request whose `Host`
  *        header is a non-localhost hostname. The container sends
- *        `Host: host.docker.internal:9223`, which Chrome refuses.
+ *        `Host: host.docker.internal:<bridge-port>`, which Chrome refuses.
  *
- *   This proxy listens on loopback only (127.0.0.1:9223), forwards to Chrome
- *   on 127.0.0.1:9222, and rewrites the `Host` header to a loopback literal
- *   Chrome accepts. It also rewrites the webSocketDebuggerUrl in /json
- *   responses back to the host:port the client used, so the CDP websocket
- *   connects back through the bridge rather than trying to reach Chrome
- *   directly.
+ *   This proxy listens on loopback only, forwards to Chrome's debug port, and
+ *   rewrites the `Host` header to a loopback literal Chrome accepts. It also
+ *   rewrites the webSocketDebuggerUrl in /json responses back to the host:port
+ *   the client used, so the CDP websocket connects back through the bridge
+ *   rather than trying to reach Chrome directly.
  *
- * Security: loopback-bound. The dedicated Chrome profile holds ONLY the Tesco
- *   session, so even the open debug surface is contained to one grocery account.
+ *   One bridge instance per group, on that group's port pair. Ports are passed
+ *   in by the launcher (BRIDGE_PORT / CHROME_PORT); the defaults below are the
+ *   historical meal-planner pair.
+ *
+ * Security: loopback-bound. Each dedicated Chrome profile is isolated to one
+ *   group, so even the open debug surface is contained to that group's logins.
  *
  * Usage:
- *   node scripts/tesco-chrome-bridge.mjs
- *   BRIDGE_PORT=9223 CHROME_PORT=9222 node scripts/tesco-chrome-bridge.mjs
+ *   BRIDGE_PORT=9225 CHROME_PORT=9224 node scripts/chrome-devtools-bridge.mjs
  */
 import http from 'node:http';
 import net from 'node:net';
@@ -71,7 +74,7 @@ const server = http.createServer((req, res) => {
   );
   upstream.on('error', (err) => {
     res.writeHead(502, { 'content-type': 'text/plain' });
-    res.end(`tesco-chrome-bridge upstream error: ${err.message}\n`);
+    res.end(`chrome-devtools-bridge upstream error: ${err.message}\n`);
   });
   req.pipe(upstream);
 });
@@ -98,5 +101,5 @@ server.on('upgrade', (req, clientSocket, head) => {
 });
 
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
-  console.log(`tesco-chrome-bridge: http://${LISTEN_HOST}:${LISTEN_PORT} -> Chrome ${TARGET_HOSTHDR}`);
+  console.log(`chrome-devtools-bridge: http://${LISTEN_HOST}:${LISTEN_PORT} -> Chrome ${TARGET_HOSTHDR}`);
 });

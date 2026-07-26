@@ -8,8 +8,8 @@ group's workspace, and the agent's own headless `agent-browser` reuses it.
 
 This is the ergonomic, general version of the "session export" browser-auth
 approach. It complements — but does not replace — the **live-browser** approach
-(`scripts/tesco-chrome.sh`), which is still required for sites with strong bot
-detection (see the caveat at the end).
+(`scripts/live-chrome.sh <group>`), which is still required for sites with strong
+bot detection (see the caveat at the end).
 
 ## How it works
 
@@ -110,6 +110,6 @@ Sessions are also listed machine-readably at
 Sites with aggressive bot detection (e.g. **Tesco**) fingerprint the browser and
 block a fresh headless `agent-browser` even with a perfectly valid session.
 Session export does **not** work for those — they need the live-browser approach
-(`scripts/tesco-chrome.sh` + `chrome-devtools-mcp`, driving a persistent
+(`scripts/live-chrome.sh <group>` + `chrome-devtools-mcp`, driving a persistent
 logged-in Chrome). If a site consistently blocks the agent despite a fresh
 export, that's the signal to switch it to the live-browser path.

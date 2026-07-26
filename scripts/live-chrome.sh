@@ -9,7 +9,7 @@
 #
 # General, one profile per group: an isolated, persistent Chrome profile that
 # YOU sign into. The agent drives it through the host-side DevTools bridge
-# (scripts/tesco-chrome-bridge.mjs). For plain anonymous browsing the agent
+# (scripts/chrome-devtools-bridge.mjs). For plain anonymous browsing the agent
 # still has its in-container `agent-browser`.
 #
 # Ports: the bridge port is read from the group's own chrome-devtools MCP config
@@ -71,7 +71,7 @@ if lsof -nP -iTCP:"$BRIDGE_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 else
   echo "Starting Chrome DevTools bridge on port $BRIDGE_PORT (log: $BRIDGE_LOG)"
   BRIDGE_PORT="$BRIDGE_PORT" CHROME_PORT="$CHROME_PORT" \
-    nohup node "$SCRIPT_DIR/tesco-chrome-bridge.mjs" >>"$BRIDGE_LOG" 2>&1 &
+    nohup node "$SCRIPT_DIR/chrome-devtools-bridge.mjs" >>"$BRIDGE_LOG" 2>&1 &
   disown || true
 fi
 

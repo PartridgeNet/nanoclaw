@@ -75,23 +75,22 @@ else
   disown || true
 fi
 
-# Colour-code + name this group's profile so its window is distinguishable from
-# other groups' live browsers. Chrome stores the profile name + theme seed in
-# <user-data-dir>/Local State under profile.info_cache.<dir>; setting a distinct
-# profile_color_seed tints the frame/toolbar and the name shows in the profile
-# pill + window title. Colour is derived deterministically from the group name
-# (stable, no per-group config). Only seeds an already-initialised profile (the
-# file exists), and only takes effect on a fresh launch — Chrome rewrites Local
-# State on exit, so a running instance must be relaunched to pick up a change.
+# Name this group's profile so its window is identifiable — Chrome shows the
+# name in the profile button/menu. Stored in <user-data-dir>/Local State under
+# profile.info_cache.<dir>; we merge it (preserving all other keys) with Chrome
+# stopped, so it applies on the next fresh launch.
+#
+# Frame COLOUR is intentionally NOT set here: Chrome 150 recomputes Local State's
+# colour seed from the profile's authoritative theme on startup and ignores the
+# externally-writable prefs, so a distinct colour must be set once per profile
+# via the Chrome UI (Profile button -> Customize Chrome -> colour). It then
+# persists in that profile.
 LS_FILE="$PROFILE/Local State"
 if [[ -f "$LS_FILE" ]]; then
   LIVE_CHROME_LABEL="$GROUP" node -e '
     const fs = require("fs");
     const group = process.env.LIVE_CHROME_LABEL;
     const lsPath = process.argv[1];
-    const palette = [0x2E7D32, 0x1565C0, 0xEF6C00, 0x6A1B9A, 0x00838F, 0xC62828, 0x4E342E, 0xAD1457];
-    let h = 0; for (const ch of group) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    const seed = (0xFF000000 | palette[h % palette.length]) | 0; // signed 32-bit ARGB
     let ls = {};
     try { ls = JSON.parse(fs.readFileSync(lsPath, "utf8")); } catch { process.exit(0); }
     ls.profile = ls.profile || {};
@@ -101,12 +100,9 @@ if [[ -f "$LS_FILE" ]]; then
       const e = (cache[d] = cache[d] || {});
       e.name = group;
       e.is_using_default_name = false;
-      e.profile_color_seed = seed;
-      e.profile_highlight_color = seed;
-      e.default_avatar_fill_color = seed;
     }
     fs.writeFileSync(lsPath, JSON.stringify(ls));
-  ' "$LS_FILE" || echo "  (profile colour/name seeding skipped)"
+  ' "$LS_FILE" || echo "  (profile naming skipped)"
 fi
 
 echo "Launching live Chrome for group: $GROUP"

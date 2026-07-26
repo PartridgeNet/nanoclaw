@@ -101,9 +101,20 @@ PLIST
   fi
 
   if [[ "$START_NOW" == "1" ]]; then
-    launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-    launchctl bootstrap "gui/$(id -u)" "$PLIST"
-    echo "  loaded + started $LABEL"
+    # If already loaded, restart it in place (kickstart -k) — avoids the
+    # bootout->bootstrap teardown race that surfaces as "5: Input/output error".
+    # If not loaded, clear the "disabled" flag (a disabled service ALSO fails
+    # bootstrap with error 5) then bootstrap.
+    if launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
+      launchctl kickstart -k "gui/$(id -u)/$LABEL" && echo "  restarted $LABEL"
+    else
+      launchctl enable "gui/$(id -u)/$LABEL" 2>/dev/null || true
+      if launchctl bootstrap "gui/$(id -u)" "$PLIST"; then
+        echo "  loaded + started $LABEL"
+      else
+        echo "  WARN: could not load $LABEL (try again, or: launchctl enable gui/$(id -u)/$LABEL)"
+      fi
+    fi
   fi
 done
 

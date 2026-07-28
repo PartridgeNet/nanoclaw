@@ -24,6 +24,7 @@ export interface ContainerConfigRow {
   packages_apt: string; // JSON: string[]
   packages_npm: string; // JSON: string[]
   packages_script: string | null; // shell script injected as Dockerfile RUN heredoc after apt/npm layers
+  packages_env: string; // JSON: Record<string, string> — emitted as Dockerfile ENV instructions after packages_script
   additional_mounts: string; // JSON: AdditionalMountConfig[]
   cli_scope: string; // 'disabled' | 'group' | 'global'
   updated_at: string;

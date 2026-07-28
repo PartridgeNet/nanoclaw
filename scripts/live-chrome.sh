@@ -105,6 +105,42 @@ if [[ -f "$LS_FILE" ]]; then
   ' "$LS_FILE" || echo "  (profile naming skipped)"
 fi
 
+# Set Chrome's default download directory to the group workspace so downloaded
+# files land somewhere the agent can read (mounted at /workspace/agent/downloads
+# inside the container). Write to Default/Preferences before launch; Chrome
+# honors user-preference keys written externally and rewrites the protection
+# hash on exit, so this sticks across restarts without manual UI changes.
+DOWNLOAD_DIR="$REPO_ROOT/groups/$GROUP/downloads"
+mkdir -p "$DOWNLOAD_DIR"
+PREFS_FILE="$PROFILE/Default/Preferences"
+if [[ -f "$PREFS_FILE" ]]; then
+  DOWNLOAD_DIR="$DOWNLOAD_DIR" node -e '
+    const fs = require("fs");
+    const dlDir = process.env.DOWNLOAD_DIR;
+    const pPath = process.argv[1];
+    let prefs = {};
+    try { prefs = JSON.parse(fs.readFileSync(pPath, "utf8")); } catch {}
+    prefs.download = prefs.download || {};
+    if (prefs.download.default_directory !== dlDir) {
+      prefs.download.default_directory = dlDir;
+      prefs.download.directory_upgrade = true;
+      prefs.download.prompt_for_download = false;
+      fs.writeFileSync(pPath, JSON.stringify(prefs));
+      process.stderr.write("  download dir -> " + dlDir + "\n");
+    }
+  ' "$PREFS_FILE" || echo "  (download dir update skipped)"
+else
+  mkdir -p "$PROFILE/Default"
+  DOWNLOAD_DIR="$DOWNLOAD_DIR" node -e '
+    const fs = require("fs");
+    const dlDir = process.env.DOWNLOAD_DIR;
+    const pPath = process.argv[1];
+    const prefs = { download: { default_directory: dlDir, directory_upgrade: true, prompt_for_download: false } };
+    fs.writeFileSync(pPath, JSON.stringify(prefs));
+    process.stderr.write("  download dir -> " + dlDir + "\n");
+  ' "$PREFS_FILE" || echo "  (download dir init skipped)"
+fi
+
 # Give an idle window the agent name in its macOS title bar via a titled home
 # page used as the default start URL — its <title> is "[<group>]".
 #
@@ -126,6 +162,7 @@ HTML
 
 echo "Launching live Chrome for group: $GROUP"
 echo "  profile:    $PROFILE"
+echo "  downloads:  $DOWNLOAD_DIR  (-> /workspace/agent/downloads in container)"
 echo "  debug port: $CHROME_PORT (loopback only)  ->  bridge $BRIDGE_PORT"
 echo "  start URL:  $START_URL"
 echo

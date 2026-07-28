@@ -566,7 +566,13 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
   const aptPackages = JSON.parse(configRow.packages_apt) as string[];
   const npmPackages = JSON.parse(configRow.packages_npm) as string[];
   const packagesScript = configRow.packages_script ?? null;
-  if (aptPackages.length === 0 && npmPackages.length === 0 && !packagesScript) {
+  const packagesEnv = JSON.parse(configRow.packages_env ?? '{}') as Record<string, string>;
+  if (
+    aptPackages.length === 0 &&
+    npmPackages.length === 0 &&
+    !packagesScript &&
+    Object.keys(packagesEnv).length === 0
+  ) {
     throw new Error('No packages to install. Use install_packages first.');
   }
 
@@ -585,6 +591,9 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
   if (packagesScript) {
     // Heredoc form handles multi-line scripts cleanly without escaping.
     dockerfile += `RUN <<'__PKGSCRIPT__'\n${packagesScript}\n__PKGSCRIPT__\n`;
+  }
+  for (const [key, val] of Object.entries(packagesEnv)) {
+    dockerfile += `ENV ${key}="${val}"\n`;
   }
   dockerfile += 'USER node\n';
 

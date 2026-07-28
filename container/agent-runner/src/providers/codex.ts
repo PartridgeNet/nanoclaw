@@ -89,6 +89,7 @@ function classifyError(message: string): string | undefined {
   if (/quota|rate limit|insufficient|billing|credit/i.test(message)) return 'quota';
   if (/sandbox|permission|denied/i.test(message)) return 'sandbox';
   if (/thread|conversation|session/i.test(message)) return 'stale-session';
+  if (/stream disconnected|websocket closed/i.test(message)) return 'stream-disconnected';
   return undefined;
 }
 
@@ -141,7 +142,11 @@ export class CodexProvider implements AgentProvider {
 
   isSessionInvalid(err: unknown): boolean {
     const msg = err instanceof Error ? err.message : String(err);
-    return STALE_THREAD_RE.test(msg);
+    // Stale/unknown thread → clear continuation so the next turn starts fresh.
+    // Stream-disconnect errors indicate the Codex thread has grown too large for
+    // OpenAI to complete the response; clearing forces a new thread rather than
+    // repeatedly hitting the same oversized context.
+    return STALE_THREAD_RE.test(msg) || /stream disconnected|websocket closed/i.test(msg);
   }
 
   registerMemorySessionHook(hook: MemorySessionHookRegistration): void {

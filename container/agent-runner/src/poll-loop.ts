@@ -61,6 +61,14 @@ function log(msg: string): void {
   console.error(`[poll-loop] ${msg}`);
 }
 
+function isQuestionResponse(m: import('./db/messages-in.js').MessageInRow): boolean {
+  try {
+    return JSON.parse(m.content).type === 'question_response';
+  } catch {
+    return false;
+  }
+}
+
 function generateId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -76,6 +84,9 @@ function classifyQueryError(msg: string): string {
   }
   if (/quota|rate.?limit|insufficient|billing|credit/i.test(msg)) {
     return "I've hit a usage limit or billing issue and can't complete the request right now.";
+  }
+  if (/stream disconnected|websocket closed/i.test(msg)) {
+    return "The connection to the AI was dropped mid-response — the conversation context had likely grown too large. I've cleared my session so the next message starts fresh.";
   }
   return `Error: ${msg}`;
 }
@@ -143,8 +154,12 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
   let isFirstPoll = true;
   while (true) {
     if (config.signal?.aborted) return;
-    // Skip system messages — they're responses for MCP tools (e.g., ask_user_question)
-    const messages = getPendingMessages(isFirstPoll).filter((m) => m.kind !== 'system');
+    // Skip system messages — they're MCP tool responses (e.g., cli_response).
+    // Exception: question_response messages are async user replies to ask_user_question
+    // cards sent in a previous turn; the agent needs to see them directly.
+    const messages = getPendingMessages(isFirstPoll).filter(
+      (m) => m.kind !== 'system' || isQuestionResponse(m),
+    );
     isFirstPoll = false;
     pollCount++;
 
@@ -418,14 +433,9 @@ export async function processQuery(
           return;
         }
 
-        // Skip system messages (MCP tool responses).
-        // Thread routing is the router's concern — if a message landed in this
-        // session, the agent should see it. Per-thread sessions already isolate
-        // threads into separate containers; shared sessions intentionally merge
-        // everything. Filtering on thread_id here caused deadlocks when the
-        // initial batch and follow-ups had mismatched thread_ids (e.g. a
-        // host-generated welcome trigger with null thread vs a Discord DM reply).
-        const newMessages = pending.filter((m) => m.kind !== 'system');
+        // Skip system messages (MCP tool responses), but let question_response
+        // through — those are async user replies to ask_user_question cards.
+        const newMessages = pending.filter((m) => m.kind !== 'system' || isQuestionResponse(m));
         if (newMessages.length === 0) return;
 
         const newIds = newMessages.map((m) => m.id);

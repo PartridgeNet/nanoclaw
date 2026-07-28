@@ -1,8 +1,12 @@
 /**
  * Interactive MCP tools: ask_user_question, send_card.
  *
- * ask_user_question is a blocking tool call — it writes a messages_out row
- * with a question card, then polls messages_in for the response.
+ * ask_user_question sends a question card and polls for a fast-path response
+ * (up to 5 seconds). If the user hasn't responded in that window, the tool
+ * returns a "pending" result so the agent can end its turn gracefully. When the
+ * user eventually clicks, the host writes a question_response system message to
+ * inbound.db and wakes the container — the agent receives the answer in its
+ * next turn via the normal poll loop.
  */
 import { findQuestionResponse, markCompleted } from '../db/messages-in.js';
 import { writeMessageOut } from '../db/messages-out.js';
@@ -34,11 +38,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const FAST_PATH_MS = 5000;
+
 export const askUserQuestion: McpToolDefinition = {
   tool: {
     name: 'ask_user_question',
     description:
-      'Ask the user a multiple-choice question and wait for their response. This is a blocking call — execution pauses until the user responds or the timeout expires. Provide a short card title (e.g. "Confirm deletion") and an array of options — each option may be a plain string (used as both button label and result value) or an object { label, selectedLabel?, value? } where selectedLabel is the text shown on the card after the user clicks.',
+      'Ask the user a multiple-choice question via an interactive card. The tool polls for a fast-path response (up to 5 seconds) in case the user replies immediately. If no response arrives in that window, the tool returns a pending status — you must then end your turn with a brief message (e.g. "Awaiting your selection above"). When the user eventually clicks, their answer arrives automatically in your next turn as a question_response. Provide a short card title (e.g. "Confirm deletion") and an array of options — each option may be a plain string (used as both button label and result value) or an object { label, selectedLabel?, value? } where selectedLabel is the text shown on the card after the user clicks.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -62,7 +68,6 @@ export const askUserQuestion: McpToolDefinition = {
           },
           description: 'Options for the user to choose from (string or {label, selectedLabel?, value?})',
         },
-        timeout: { type: 'number', description: 'Timeout in seconds (default: 300)' },
       },
       required: ['title', 'question', 'options'],
     },
@@ -71,7 +76,6 @@ export const askUserQuestion: McpToolDefinition = {
     const title = args.title as string;
     const question = args.question as string;
     const rawOptions = args.options as unknown[];
-    const timeout = ((args.timeout as number) || 300) * 1000;
     if (!title || !question || !rawOptions?.length) {
       return err('title, question, and options are required');
     }
@@ -105,27 +109,30 @@ export const askUserQuestion: McpToolDefinition = {
       }),
     });
 
-    log(`ask_user_question: ${questionId} → "${question}" [${options.join(', ')}]`);
+    log(`ask_user_question: ${questionId} → "${question}" [${options.map((o) => o.label).join(', ')}]`);
 
-    // Poll for response in inbound.db (host writes the response there)
-    const deadline = Date.now() + timeout;
+    // Fast-path: poll briefly in case the user responds immediately.
+    const deadline = Date.now() + FAST_PATH_MS;
     while (Date.now() < deadline) {
       const response = findQuestionResponse(questionId);
 
       if (response) {
         const parsed = JSON.parse(response.content);
-        // Mark the response as completed via processing_ack (outbound.db)
         markCompleted([response.id]);
-
-        log(`ask_user_question response: ${questionId} → ${parsed.selectedOption}`);
+        log(`ask_user_question fast-path response: ${questionId} → ${parsed.selectedOption}`);
         return ok(parsed.selectedOption);
       }
 
       await sleep(1000);
     }
 
-    log(`ask_user_question timeout: ${questionId}`);
-    return err(`Question timed out after ${timeout / 1000}s`);
+    // No fast-path response — return pending so the agent can end its turn.
+    // The host will write a question_response system message to inbound.db
+    // when the user clicks, waking the container for the next turn.
+    log(`ask_user_question pending: ${questionId}`);
+    return ok(
+      `pending:${questionId} — the interactive card has been sent. End your turn now (e.g. "Awaiting your selection above"). The user's answer will arrive as a question_response in your next turn.`,
+    );
   },
 };
 

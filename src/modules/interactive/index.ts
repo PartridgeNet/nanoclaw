@@ -30,6 +30,11 @@ async function handleInteractiveResponse(payload: ResponsePayload): Promise<bool
     return true; // claimed — we owned this questionId even though the session is gone
   }
 
+  // Resolve the human-readable label for the selected option from the stored
+  // pending question, so the formatter can present a clear message to the agent.
+  const selectedOption = pq.options.find((o) => o.value === payload.value);
+  const selectedLabel = selectedOption?.selectedLabel ?? selectedOption?.label ?? payload.value;
+
   writeSessionMessage(session.agent_group_id, session.id, {
     id: `qr-${payload.questionId}-${Date.now()}`,
     kind: 'system',
@@ -40,7 +45,9 @@ async function handleInteractiveResponse(payload: ResponsePayload): Promise<bool
     content: JSON.stringify({
       type: 'question_response',
       questionId: payload.questionId,
+      questionTitle: pq.title,
       selectedOption: payload.value,
+      selectedLabel,
       userId: payload.userId ?? '',
     }),
   });

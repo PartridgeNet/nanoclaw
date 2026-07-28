@@ -243,6 +243,11 @@ function formatWebhookMessage(msg: MessageInRow): string {
 
 function formatSystemMessage(msg: MessageInRow): string {
   const content = parseContent(msg.content);
+  if (content.type === 'question_response') {
+    const title = escapeXml(String(content.questionTitle || content.questionId || ''));
+    const label = escapeXml(String(content.selectedLabel || content.selectedOption || ''));
+    return `<question_response questionId="${escapeXml(String(content.questionId || ''))}" question="${title}">The user selected: ${label}</question_response>`;
+  }
   const from = originAttr(msg);
   return `<system_response${from} action="${escapeXml(content.action || 'unknown')}" status="${escapeXml(content.status || 'unknown')}">${JSON.stringify(content.result || null)}</system_response>`;
 }

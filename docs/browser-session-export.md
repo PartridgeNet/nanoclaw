@@ -3,7 +3,7 @@
 Give an agent access to a website that needs a login, without ever putting
 credentials in chat, env, or the vault. You log in **once** in a real Chrome
 or Brave window on your Mac; the resulting session (cookies + localStorage) is
-copied to the NanoClaw host at `rob.s@assistant`, exported into the agent
+copied to the NanoClaw host at `rs@nipogi-e3`, exported into the agent
 group's workspace, and the agent's own headless `agent-browser` reuses it.
 
 This is the ergonomic, general version of the "session export" browser-auth
@@ -22,9 +22,9 @@ scripts/browser-session-export.sh <group> [name] [login-url]
    ├─ you log in (username, password, MFA, "remember me"), press Enter
    ├─ browser-session-export.mjs connects over CDP and writes a Playwright
    │  storageState JSON to a local temp file
-   ├─ scp uploads the session to rob.s@assistant, where it lands at
+   ├─ scp uploads the session to rs@nipogi-e3, where it lands at
    │  groups/<group>/.browser-sessions/<name>-exported-session.json  (mode 600)
-   └─ tailscale ssh runs browser-session-scaffold.mjs on rob.s@assistant to
+   └─ tailscale ssh runs browser-session-scaffold.mjs on rs@nipogi-e3 to
       update the group's session manifest and (re)write the per-group
       `browser-session` skill
 ```
@@ -41,7 +41,7 @@ The launcher prefers Chrome, then falls back to Brave. It checks standard macOS
 app locations, common Linux commands/paths, and Flatpak Brave. For unusual
 installs, set `BROWSER_EXPORT_BROWSER=/path/to/browser`.
 The machine running the script must also be online in the same Tailscale
-tailnet, because the final session file is copied to `rob.s@assistant`.
+tailnet, because the final session file is copied to `rs@nipogi-e3`.
 
 ## Usage
 
@@ -55,7 +55,7 @@ bash scripts/browser-session-export.sh personal-shopper amazon https://www.amazo
 
 A Chrome or Brave window opens; log in, leave it on a signed-in page, return to
 the terminal and press Enter. The session is captured locally, copied to
-`rob.s@assistant`, and the group is ready.
+`rs@nipogi-e3`, and the group is ready.
 
 Re-run the same command whenever a session expires (the agent will tell you it
 landed on a login page).
@@ -88,15 +88,15 @@ Sessions are also listed machine-readably at
 |------|---------|
 | `scripts/browser-session-export.sh` | Local launcher: validate the remote group, launch Chrome, wait for login, capture, upload, scaffold |
 | `scripts/browser-session-export.mjs` | Zero-dep CDP capture → Playwright `storageState` JSON (Node 22 global `WebSocket`) |
-| `scripts/browser-session-scaffold.mjs` | Run on `rob.s@assistant` to update the group's session manifest + rewrite the per-group skill |
-| `rob.s@assistant:/Users/rob.s/src/PartridgeNet/nanoclaw/groups/<group>/.browser-sessions/*-exported-session.json` | Captured sessions (mode 600, gitignored) |
-| `rob.s@assistant:/Users/rob.s/src/PartridgeNet/nanoclaw/groups/<group>/.browser-sessions/index.json` | Session manifest |
-| `rob.s@assistant:/Users/rob.s/src/PartridgeNet/nanoclaw/groups/<group>/skills/browser-session/SKILL.md` | Per-group skill teaching the agent to use its sessions |
+| `scripts/browser-session-scaffold.mjs` | Run on `rs@nipogi-e3` to update the group's session manifest + rewrite the per-group skill |
+| `rs@nipogi-e3:/home/rs/src/PartridgeNet/nanoclaw/groups/<group>/.browser-sessions/*-exported-session.json` | Captured sessions (mode 600, gitignored) |
+| `rs@nipogi-e3:/home/rs/src/PartridgeNet/nanoclaw/groups/<group>/.browser-sessions/index.json` | Session manifest |
+| `rs@nipogi-e3:/home/rs/src/PartridgeNet/nanoclaw/groups/<group>/skills/browser-session/SKILL.md` | Per-group skill teaching the agent to use its sessions |
 
 ## Security
 
 - Session files hold **live auth tokens**. They are captured to a local temp
-  file, uploaded over `scp`, written mode `600` on `rob.s@assistant`, live under
+  file, uploaded over `scp`, written mode `600` on `rs@nipogi-e3`, live under
   `groups/*` (gitignored) and match `*-exported-session.json` /
   `.browser-sessions/` in `.gitignore` — never commit them, never echo their
   contents.

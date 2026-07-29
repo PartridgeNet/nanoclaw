@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # browser-session-export.sh — Log in to a website on this Mac and export the
-# session for the NanoClaw agent hosted on rob.s@assistant to use.
+# session for the NanoClaw agent hosted on rs@nipogi-e3 to use.
 #
 # This is the ergonomic, general version of the "session export" browser-auth
 # approach: you log in once in a real Chrome or Brave window, and the resulting
@@ -29,8 +29,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BROWSER_CMD=()
 BROWSER_NAME=""
-REMOTE_TARGET="rob.s@assistant"
-REMOTE_ROOT="/Users/rob.s/src/PartridgeNet/nanoclaw"
+REMOTE_TARGET="rs@nipogi-e3"
+REMOTE_ROOT="/home/rs/src/PartridgeNet/nanoclaw"
 
 shell_quote() {
   printf '%q' "$1"
@@ -43,8 +43,8 @@ remote_eval() {
 ensure_remote_connection() {
   if ! remote_eval "printf 'ok\n'" >/dev/null; then
     echo "Could not connect to $REMOTE_TARGET with Tailscale SSH." >&2
-    echo "Check that the assistant machine is online, reachable on Tailscale, and accepting SSH." >&2
-    echo "Try: tailscale ping assistant" >&2
+    echo "Check that nipogi-e3 is online, reachable on Tailscale, and accepting SSH." >&2
+    echo "Try: tailscale ping nipogi-e3" >&2
     echo "Then: tailscale ssh $REMOTE_TARGET 'pwd'" >&2
     exit 1
   fi

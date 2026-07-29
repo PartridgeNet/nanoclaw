@@ -458,15 +458,17 @@ async function buildContainerArgs(
   // Everything NanoClaw-specific is in container.json (read by runner at startup).
   args.push('-e', `TZ=${TIMEZONE}`);
 
-  // Loopback must never route through the OneCLI egress proxy. The gateway
-  // injects HTTP(S)_PROXY (below, via applyContainerConfig) but no NO_PROXY, so
-  // agent-run tooling that hits a local dev server (health checks, curl, Node
-  // fetch) gets misrouted through the proxy and fails. Exclude loopback for
-  // both upper/lower-case conventions; external hosts still go through the
-  // gateway for credential injection. Set before the gateway apply so it's
-  // present regardless of what the SDK contributes.
-  args.push('-e', 'NO_PROXY=localhost,127.0.0.1,::1');
-  args.push('-e', 'no_proxy=localhost,127.0.0.1,::1');
+  // Loopback and the Docker host gateway must never route through the OneCLI
+  // egress proxy. The gateway injects HTTP(S)_PROXY but no NO_PROXY, so
+  // agent-run tooling that hits a local address (health checks, curl, Node
+  // fetch, chrome-devtools-mcp → live browser bridge) gets misrouted through
+  // the proxy and fails. Node 22 undici uses EnvHttpProxyAgent so this affects
+  // built-in fetch too. Exclude loopback + host.docker.internal for both
+  // upper/lower-case conventions; external hosts still go through the gateway
+  // for credential injection. Set before the gateway apply so it's present
+  // regardless of what the SDK contributes.
+  args.push('-e', 'NO_PROXY=localhost,127.0.0.1,::1,host.docker.internal');
+  args.push('-e', 'no_proxy=localhost,127.0.0.1,::1,host.docker.internal');
 
   // Provider-contributed env vars (e.g. XDG_DATA_HOME, OPENCODE_*, NO_PROXY).
   if (providerContribution.env) {

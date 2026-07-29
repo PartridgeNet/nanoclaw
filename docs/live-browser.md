@@ -16,7 +16,9 @@ Each live-browser group has:
 - A **DevTools bridge** (`scripts/chrome-devtools-bridge.mjs`) that proxies
   CDP traffic from the agent container (`host.docker.internal:<bridge-port>`)
   to Chromium's loopback-only debug port, rewriting the `Host` header so
-  Chromium's DNS-rebinding protection accepts the request.
+  Chromium's DNS-rebinding protection accepts the request. On Linux, Docker
+  containers reach the host via the docker bridge interface (`172.17.0.1`), not
+  loopback, so the bridge listens on `0.0.0.0`.
 
 ```
 agent container

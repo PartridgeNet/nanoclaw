@@ -15,18 +15,20 @@
  *        header is a non-localhost hostname. The container sends
  *        `Host: host.docker.internal:<bridge-port>`, which Chrome refuses.
  *
- *   This proxy listens on loopback only, forwards to Chrome's debug port, and
- *   rewrites the `Host` header to a loopback literal Chrome accepts. It also
- *   rewrites the webSocketDebuggerUrl in /json responses back to the host:port
- *   the client used, so the CDP websocket connects back through the bridge
- *   rather than trying to reach Chrome directly.
+ *   This proxy forwards to Chrome's debug port and rewrites the `Host` header
+ *   to a loopback literal Chrome accepts. It also rewrites the
+ *   webSocketDebuggerUrl in /json responses back to the host:port the client
+ *   used, so the CDP websocket connects back through the bridge rather than
+ *   trying to reach Chrome directly.
  *
  *   One bridge instance per group, on that group's port pair. Ports are passed
  *   in by the launcher (BRIDGE_PORT / CHROME_PORT); the defaults below are the
  *   historical meal-planner pair.
  *
- * Security: loopback-bound. Each dedicated Chrome profile is isolated to one
- *   group, so even the open debug surface is contained to that group's logins.
+ * Note: on Linux, Docker containers reach the host via the docker bridge
+ *   interface (172.17.0.1), not loopback — so the bridge must listen on
+ *   0.0.0.0, not 127.0.0.1. Each dedicated Chrome profile is isolated to one
+ *   group, so the open debug surface is contained to that group's logins.
  *
  * Usage:
  *   BRIDGE_PORT=9225 CHROME_PORT=9224 node scripts/chrome-devtools-bridge.mjs
@@ -34,7 +36,7 @@
 import http from 'node:http';
 import net from 'node:net';
 
-const LISTEN_HOST = process.env.BRIDGE_HOST || '127.0.0.1';
+const LISTEN_HOST = process.env.BRIDGE_HOST || '0.0.0.0';
 const LISTEN_PORT = Number(process.env.BRIDGE_PORT || 9223);
 const TARGET_HOST = process.env.CHROME_HOST || '127.0.0.1';
 const TARGET_PORT = Number(process.env.CHROME_PORT || 9222);

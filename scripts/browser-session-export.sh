@@ -37,7 +37,8 @@ shell_quote() {
 }
 
 remote_eval() {
-  tailscale ssh "$REMOTE_TARGET" "bash -lc $(shell_quote "$1")"
+  local preamble='export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"'
+  tailscale ssh "$REMOTE_TARGET" "bash -lc $(shell_quote "$preamble; $1")"
 }
 
 ensure_remote_connection() {

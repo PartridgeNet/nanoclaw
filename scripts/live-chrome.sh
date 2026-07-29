@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 #
-# live-chrome.sh — Launch a dedicated live, headed Chrome that a NanoClaw agent
-# group drives over CDP (via its `chrome-devtools` MCP server), for any site
-# that needs a real, persistent, logged-in browser: sites with strong bot
+# live-chrome.sh — Launch a dedicated live, headed Chromium that a NanoClaw
+# agent group drives over CDP (via its `chrome-devtools` MCP server), for any
+# site that needs a real, persistent, logged-in browser: sites with strong bot
 # detection, or accounts where exported cookie sessions get rejected (e.g.
 # Google — device-bound session checks reject transferred cookies, so a real
 # headed browser you sign into is the only path that holds).
 #
-# General, one profile per group: an isolated, persistent Chrome profile that
-# YOU sign into. The agent drives it through the host-side DevTools bridge
+# One profile per group: an isolated, persistent Chromium profile that YOU sign
+# into. The agent drives it through the host-side DevTools bridge
 # (scripts/chrome-devtools-bridge.mjs). For plain anonymous browsing the agent
 # still has its in-container `agent-browser`.
 #
 # Ports: the bridge port is read from the group's own chrome-devtools MCP config
 # (`--browserUrl http://host.docker.internal:<port>`), so the launcher and the
-# container always agree. Chrome's debug port defaults to <bridge_port - 1>.
+# container always agree. Chromium's debug port defaults to <bridge_port - 1>.
 # Override either with LIVE_BRIDGE_PORT / LIVE_CHROME_PORT.
 #
 # Logins persist in the profile, so you sign in once per site and rarely
@@ -23,7 +23,7 @@
 #
 # Usage:
 #   bash scripts/live-chrome.sh <group> [start-url]
-#   bash scripts/live-chrome.sh nathan-barley https://photos.google.com
+#   bash scripts/live-chrome.sh rs-work-pa https://linear.app
 #
 set -euo pipefail
 
@@ -32,11 +32,26 @@ START_URL="${2:-}"   # defaulted to the group's titled home page below
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 PROFILE="${LIVE_CHROME_PROFILE:-$HOME/.nanoclaw-live-chrome/$GROUP}"
+CHROME="${LIVE_CHROME_BIN:-/usr/bin/chromium}"
 
 if [[ ! -x "$CHROME" ]]; then
-  echo "Google Chrome not found at: $CHROME" >&2
+  echo "Chromium not found at: $CHROME. Set LIVE_CHROME_BIN to override." >&2
+  exit 1
+fi
+
+# Auto-detect display if not already in the environment (common when launching
+# from a systemd service or SSH session that doesn't inherit the desktop env).
+XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export XDG_RUNTIME_DIR
+if [[ -z "${DISPLAY:-}" && -S "/tmp/.X11-unix/X0" ]]; then
+  export DISPLAY=:0
+fi
+if [[ -z "${WAYLAND_DISPLAY:-}" && -S "$XDG_RUNTIME_DIR/wayland-1" ]]; then
+  export WAYLAND_DISPLAY=wayland-1
+fi
+if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+  echo "No display found. Run from a graphical terminal, or set \$DISPLAY / \$WAYLAND_DISPLAY." >&2
   exit 1
 fi
 
@@ -66,7 +81,7 @@ mkdir -p "$(dirname "$BRIDGE_LOG")" "$PROFILE"
 # Ensure the host-side DevTools bridge is running for this group's port. It's
 # session-independent (nohup) and idempotent — if something is already
 # listening on the bridge port we leave it alone.
-if lsof -nP -iTCP:"$BRIDGE_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+if ss -tlnp "sport = :$BRIDGE_PORT" 2>/dev/null | grep -q LISTEN; then
   echo "Bridge already running on port $BRIDGE_PORT."
 else
   echo "Starting Chrome DevTools bridge on port $BRIDGE_PORT (log: $BRIDGE_LOG)"
@@ -75,16 +90,10 @@ else
   disown || true
 fi
 
-# Name this group's profile so its window is identifiable — Chrome shows the
+# Name this group's profile so its window is identifiable — Chromium shows the
 # name in the profile button/menu. Stored in <user-data-dir>/Local State under
-# profile.info_cache.<dir>; we merge it (preserving all other keys) with Chrome
-# stopped, so it applies on the next fresh launch.
-#
-# Frame COLOUR is intentionally NOT set here: Chrome 150 recomputes Local State's
-# colour seed from the profile's authoritative theme on startup and ignores the
-# externally-writable prefs, so a distinct colour must be set once per profile
-# via the Chrome UI (Profile button -> Customize Chrome -> colour). It then
-# persists in that profile.
+# profile.info_cache.<dir>; we merge it (preserving all other keys) with
+# Chromium stopped, so it applies on the next fresh launch.
 LS_FILE="$PROFILE/Local State"
 if [[ -f "$LS_FILE" ]]; then
   LIVE_CHROME_LABEL="$GROUP" node -e '
@@ -105,9 +114,9 @@ if [[ -f "$LS_FILE" ]]; then
   ' "$LS_FILE" || echo "  (profile naming skipped)"
 fi
 
-# Set Chrome's default download directory to the group workspace so downloaded
+# Set Chromium's default download directory to the group workspace so downloaded
 # files land somewhere the agent can read (mounted at /workspace/agent/downloads
-# inside the container). Write to Default/Preferences before launch; Chrome
+# inside the container). Write to Default/Preferences before launch; Chromium
 # honors user-preference keys written externally and rewrites the protection
 # hash on exit, so this sticks across restarts without manual UI changes.
 DOWNLOAD_DIR="$REPO_ROOT/groups/$GROUP/downloads"
@@ -141,38 +150,69 @@ else
   ' "$PREFS_FILE" || echo "  (download dir init skipped)"
 fi
 
-# Give an idle window the agent name in its macOS title bar via a titled home
-# page used as the default start URL — its <title> is "[<group>]".
-#
-# NOTE: prefixing the title of *navigated* pages would need a loaded extension,
-# but Chrome 150 ignores command-line extension loading (--load-extension /
-# --disable-extensions-except are both no-ops here), so that isn't possible.
-# Once the agent navigates away, the window title is the page's own title. The
-# always-visible per-window identifier is Chrome's profile button (the profile
-# is named after the group).
+# Give an idle window the agent name in its title bar via a titled home page
+# used as the default start URL — its <title> is "[<group>]".
 HOME_HTML="$HOME/.nanoclaw-live-chrome/$GROUP-home.html"
 mkdir -p "$(dirname "$HOME_HTML")"
 cat > "$HOME_HTML" <<HTML
 <!doctype html><html><head><meta charset="utf-8"><title>[$GROUP]</title></head>
-<body style="font:14px -apple-system,sans-serif;color:#666;padding:2rem">
+<body style="font:14px sans-serif;color:#666;padding:2rem">
 Live browser for <b>$GROUP</b>. This window is driven by the $GROUP agent.
 </body></html>
 HTML
 [[ -z "$START_URL" ]] && START_URL="file://$HOME_HTML"
 
-echo "Launching live Chrome for group: $GROUP"
+echo "Launching live Chromium for group: $GROUP"
 echo "  profile:    $PROFILE"
 echo "  downloads:  $DOWNLOAD_DIR  (-> /workspace/agent/downloads in container)"
 echo "  debug port: $CHROME_PORT (loopback only)  ->  bridge $BRIDGE_PORT"
 echo "  start URL:  $START_URL"
-echo
-echo "Sign into whatever sites you want '$GROUP' to use (approve any 2FA)."
-echo "Logins persist in this profile. Leave the window running while it browses."
+# Headless mode: headed Chromium on Wayland (Linux) does not bind
+# --remote-debugging-port — the DevTools HTTP server is silently omitted for
+# windowed instances. Headless=new DOES bind the port and still writes
+# sessions/cookies to the profile, so automation works normally.
+#
+# Default to headless when LIVE_CHROME_HEADLESS=1 (set by the systemd service).
+# Omit or set to 0 for interactive login runs where you need a visible window.
+LIVE_CHROME_HEADLESS="${LIVE_CHROME_HEADLESS:-0}"
 
-exec "$CHROME" \
-  --user-data-dir="$PROFILE" \
-  --remote-debugging-port="$CHROME_PORT" \
-  --remote-allow-origins='*' \
-  --no-first-run \
-  --no-default-browser-check \
-  "$START_URL"
+if [[ "$LIVE_CHROME_HEADLESS" == "1" ]]; then
+  echo
+  echo "Running in headless mode (service mode). The agent connects via DevTools."
+  echo "To sign in to sites, stop the service and re-run with LIVE_CHROME_HEADLESS=0:"
+  echo "  systemctl --user stop nanoclaw-live-chrome-${GROUP}.service"
+  echo "  LIVE_CHROME_HEADLESS=0 bash scripts/live-chrome.sh ${GROUP}"
+  echo "  (sign in, then close the window)"
+  echo "  systemctl --user start nanoclaw-live-chrome-${GROUP}.service"
+
+  exec "$CHROME" \
+    --user-data-dir="$PROFILE" \
+    --remote-debugging-port="$CHROME_PORT" \
+    --remote-allow-origins='*' \
+    --no-first-run \
+    --no-default-browser-check \
+    --headless=new \
+    "$START_URL"
+else
+  echo
+  echo "Running in headed (login) mode for group: $GROUP"
+  echo "Sign into whatever sites you need (approve any 2FA)."
+  echo "Logins persist in this profile."
+  echo
+  if [[ -z "${LIVE_CHROME_LOGIN:-}" ]]; then
+    echo "  Tip: use  bash scripts/live-chrome-login.sh $GROUP  instead — it"
+    echo "  stops/restarts the headless service around this login window automatically."
+  fi
+
+  OZONE_PLATFORM="${LIVE_OZONE_PLATFORM:-}"
+  if [[ -z "$OZONE_PLATFORM" ]]; then
+    [[ -n "${WAYLAND_DISPLAY:-}" ]] && OZONE_PLATFORM=wayland || OZONE_PLATFORM=x11
+  fi
+
+  exec "$CHROME" \
+    --user-data-dir="$PROFILE" \
+    --no-first-run \
+    --no-default-browser-check \
+    --ozone-platform="$OZONE_PLATFORM" \
+    "$START_URL"
+fi

@@ -1,23 +1,20 @@
 #!/usr/bin/env bash
 #
-# install-live-chrome-autostart.sh — Register a launchd LaunchAgent per live
-# agent browser so each group's dedicated Chrome comes back automatically when
-# the host restarts (logs in).
+# install-live-chrome-autostart.sh — Register a systemd user service per live
+# agent browser so each group's dedicated Chromium comes back automatically
+# when the host restarts.
 #
 # A "live browser" group is one whose container config has a chrome-devtools
-# MCP server pointing at a host bridge (`--browserUrl http://host.docker.internal:<port>`)
-# — i.e. it drives a real headed Chrome on this Mac via scripts/live-chrome.sh.
-# Groups whose chrome-devtools MCP has no browserUrl launch their own in-container
-# browser and are skipped (nothing on the host to start).
+# MCP server pointing at a host bridge (`--browserUrl http://host.docker.internal:<port>`).
+# Groups whose chrome-devtools MCP has no browserUrl are skipped.
 #
-# Each agent runs `scripts/live-chrome.sh <group>`, which also (idempotently)
-# starts that group's host-side DevTools bridge. Plists land in
-# ~/Library/LaunchAgents/com.nanoclaw.live-chrome.<group>.plist and, being
-# user LaunchAgents, are loaded automatically at every login/restart.
+# Each service runs `scripts/live-chrome.sh <group>`, which also (idempotently)
+# starts that group's host-side DevTools bridge. Service units land in
+# ~/.config/systemd/user/ and are enabled for graphical-session.target.
 #
 # Usage:
-#   bash scripts/install-live-chrome-autostart.sh              # write + validate plists (take effect next login)
-#   bash scripts/install-live-chrome-autostart.sh --start-now  # also load + launch them right now
+#   bash scripts/install-live-chrome-autostart.sh              # write + enable units
+#   bash scripts/install-live-chrome-autostart.sh --start-now  # also start them now
 #
 set -euo pipefail
 
@@ -26,11 +23,8 @@ START_NOW=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LA_DIR="$HOME/Library/LaunchAgents"
-NODE_BIN="$(command -v node)"
-NODE_DIR="$(dirname "$NODE_BIN")"
-PLIST_PATH="$NODE_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.local/bin"
-mkdir -p "$LA_DIR" "$HOME/.nanoclaw-live-chrome"
+UNIT_DIR="$HOME/.config/systemd/user"
+mkdir -p "$UNIT_DIR"
 
 # Discover live-browser groups (folder names) that have a bridge browserUrl.
 LIVE_GROUPS="$(cd "$REPO_ROOT" && node -e '
@@ -54,74 +48,46 @@ echo "Live-browser groups: $(echo "$LIVE_GROUPS" | tr '\n' ' ')"
 echo
 
 for GROUP in $LIVE_GROUPS; do
-  LABEL="com.nanoclaw.live-chrome.$GROUP"
-  PLIST="$LA_DIR/$LABEL.plist"
-  cat > "$PLIST" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>$LABEL</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/bin/bash</string>
-        <string>$REPO_ROOT/scripts/live-chrome.sh</string>
-        <string>$GROUP</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>$REPO_ROOT</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-    </dict>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>HOME</key>
-        <string>$HOME</string>
-        <key>PATH</key>
-        <string>$PLIST_PATH</string>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>$HOME/.nanoclaw-live-chrome/$GROUP-autostart.out.log</string>
-    <key>StandardErrorPath</key>
-    <string>$HOME/.nanoclaw-live-chrome/$GROUP-autostart.err.log</string>
-</dict>
-</plist>
-PLIST
+  UNIT="nanoclaw-live-chrome-${GROUP}.service"
+  UNIT_FILE="$UNIT_DIR/$UNIT"
 
-  if plutil -lint "$PLIST" >/dev/null; then
-    echo "  wrote $PLIST"
-  else
-    echo "  ERROR: invalid plist $PLIST" >&2
-    exit 1
-  fi
+  cat > "$UNIT_FILE" <<UNIT
+[Unit]
+Description=NanoClaw live browser for ${GROUP}
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+Environment=LIVE_CHROME_HEADLESS=1
+ExecStart=/bin/bash ${REPO_ROOT}/scripts/live-chrome.sh ${GROUP}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
+UNIT
+
+  echo "  wrote $UNIT_FILE"
+done
+
+systemctl --user daemon-reload
+
+for GROUP in $LIVE_GROUPS; do
+  UNIT="nanoclaw-live-chrome-${GROUP}.service"
+  systemctl --user enable "$UNIT"
+  echo "  enabled $UNIT"
 
   if [[ "$START_NOW" == "1" ]]; then
-    # If already loaded, restart it in place (kickstart -k) — avoids the
-    # bootout->bootstrap teardown race that surfaces as "5: Input/output error".
-    # If not loaded, clear the "disabled" flag (a disabled service ALSO fails
-    # bootstrap with error 5) then bootstrap.
-    if launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
-      launchctl kickstart -k "gui/$(id -u)/$LABEL" && echo "  restarted $LABEL"
-    else
-      launchctl enable "gui/$(id -u)/$LABEL" 2>/dev/null || true
-      if launchctl bootstrap "gui/$(id -u)" "$PLIST"; then
-        echo "  loaded + started $LABEL"
-      else
-        echo "  WARN: could not load $LABEL (try again, or: launchctl enable gui/$(id -u)/$LABEL)"
-      fi
-    fi
+    systemctl --user restart "$UNIT"
+    echo "  started $UNIT"
   fi
 done
 
 echo
 if [[ "$START_NOW" == "1" ]]; then
-  echo "Done. Live browsers are running now and will restart on every login."
+  echo "Done. Live browsers are running now and will restart on every graphical session start."
 else
-  echo "Done. Plists written; they load automatically at next login/restart."
+  echo "Done. Services enabled; they start automatically with your next graphical session."
   echo "To launch them now without waiting, re-run with --start-now."
 fi

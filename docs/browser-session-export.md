@@ -110,6 +110,7 @@ Sessions are also listed machine-readably at
 Sites with aggressive bot detection (e.g. **Tesco**) fingerprint the browser and
 block a fresh headless `agent-browser` even with a perfectly valid session.
 Session export does **not** work for those — they need the live-browser approach
-(`scripts/live-chrome.sh <group>` + `chrome-devtools-mcp`, driving a persistent
-logged-in Chrome). If a site consistently blocks the agent despite a fresh
-export, that's the signal to switch it to the live-browser path.
+(`chrome-devtools-mcp` driving a persistent headless Chromium service). If a site
+consistently blocks the agent despite a fresh export, that's the signal to switch
+it to the live-browser path. See [docs/live-browser.md](live-browser.md) for setup
+and sign-in instructions.

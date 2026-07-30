@@ -255,6 +255,41 @@ Check these first when something goes wrong:
 
 Note: container logs are lost after the container exits (`--rm` flag). If the agent silently failed inside the container, there's no persistent log to inspect.
 
+### Querying agent message history (including Slack threads)
+
+When a user references a Slack message URL like `https://<workspace>.slack.com/archives/<channel>/p<timestamp>`, **do not authenticate with Slack MCP**. Read it directly from the session DBs instead:
+
+1. **Decode the URL** — channel is `<channel>` (e.g. `C0BFPQ67M3K`), timestamp is the `p`-prefixed digits with a `.` inserted before the last 6 digits (e.g. `p1785404643659969` → `1785404643.659969`).
+
+2. **Find the messaging group:**
+   ```bash
+   pnpm exec tsx scripts/q.ts data/v2.db "SELECT id, name FROM messaging_groups WHERE platform_id='slack:<channel>'"
+   ```
+
+3. **Find sessions for that group:**
+   ```bash
+   pnpm exec tsx scripts/q.ts data/v2.db "SELECT id, agent_group_id FROM sessions WHERE messaging_group_id='<mg-id>' ORDER BY created_at DESC LIMIT 10"
+   ```
+
+4. **Read messages** — sessions live at `data/v2-sessions/<agent_group_id>/<session_id>/`:
+   ```bash
+   # Thread messages (agent saw)
+   pnpm exec tsx scripts/q.ts data/v2-sessions/<ag-id>/<sess-id>/inbound.db \
+     "SELECT id, content FROM messages_in WHERE thread_id='slack:<channel>:<timestamp>' ORDER BY seq"
+   # Agent replies
+   pnpm exec tsx scripts/q.ts data/v2-sessions/<ag-id>/<sess-id>/outbound.db \
+     "SELECT content FROM messages_out ORDER BY seq"
+   ```
+   The `content` column is JSON; the human-readable text is in `.text`. Search nearby sessions (timestamps close to the URL timestamp) if a single session doesn't contain the full thread.
+
+5. **Search across sessions** for a keyword:
+   ```bash
+   for sess in $(ls data/v2-sessions/<ag-id>/); do
+     pnpm exec tsx scripts/q.ts data/v2-sessions/<ag-id>/$sess/inbound.db \
+       "SELECT content FROM messages_in WHERE content LIKE '%keyword%'" 2>/dev/null && echo "^^^ $sess"
+   done
+   ```
+
 ## Timestamps
 
 Two rules, no exceptions:

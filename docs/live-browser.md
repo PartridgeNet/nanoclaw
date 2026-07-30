@@ -8,11 +8,12 @@ agent to browse as you.
 Each live-browser group has:
 - A **persistent Chromium profile** at `~/.nanoclaw-live-chrome/<group>/`
   that holds your cookies, localStorage, and account sessions.
-- A **headless Chromium service** (`nanoclaw-live-chrome-<group>.service`)
-  running that profile. Headless mode is required because Chromium on
-  Wayland/Linux does not bind `--remote-debugging-port` in headed (windowed)
-  mode — the DevTools HTTP server is silently omitted. Headless mode binds
-  the port immediately and still reads/writes the persistent profile.
+- A **Xvfb-backed Chromium service** (`nanoclaw-live-chrome-<group>.service`)
+  running that profile on a virtual X11 display. This avoids two problems:
+  headed Chromium on Wayland does not bind `--remote-debugging-port` (the
+  DevTools HTTP server is silently omitted), and `--headless=new` is detected
+  and blocked by Cloudflare. Running on a virtual display presents a normal
+  headed browser fingerprint while still binding the debug port.
 - A **DevTools bridge** (`scripts/chrome-devtools-bridge.mjs`) that proxies
   CDP traffic from the agent container (`host.docker.internal:<bridge-port>`)
   to Chromium's loopback-only debug port, rewriting the `Host` header so
@@ -149,21 +150,25 @@ The agent cannot fix this itself — sign-in requires a human in the loop.
 4. Add `instructions` to the MCP config explaining what sites the agent is
    signed into, and when to use this browser vs `agent-browser`.
 
-## Why headless?
+## Why Xvfb?
 
-Chromium on Wayland (Hyprland, Arch Linux) silently skips the DevTools HTTP
-server in headed (windowed) mode — the remote debugging port never binds, no
-error is printed, and no `DevToolsActivePort` file is created. This has been
-tested across multiple Chromium flag combinations (`--remote-debugging-address`,
-`--no-sandbox`, `--disable-gpu`, `--enable-automation`, with/without
-`--remote-allow-origins`, etc.) and is consistent across Chromium 148 on this
-host. `--headless=new` binds the port immediately.
+Two constraints rule out the obvious alternatives:
 
-The trade-off is no visible window for the running service. The persistent
-profile (cookies, localStorage, account sessions) is fully preserved in headless
-mode — only the rendering surface differs. Sign-in is handled out-of-band via
-the login script, which opens a standard headed Chromium window (without a debug
-port) on the same profile.
+- **Wayland headed mode**: Chromium on Wayland (Hyprland, Arch Linux) silently
+  skips the DevTools HTTP server — `--remote-debugging-port` never binds, no
+  error is printed, no `DevToolsActivePort` file is created. Consistent across
+  Chromium 148 and multiple flag combinations tested.
+- **`--headless=new`**: Binds the debug port but is detected and blocked by
+  Cloudflare Bot Management on sites like `claude.ai`.
+
+Xvfb provides a virtual X11 display. Chromium runs in normal headed mode on
+it (`--ozone-platform=x11`), binds the debug port correctly, and presents a
+non-headless browser fingerprint. The persistent profile (cookies, localStorage,
+account sessions) is fully preserved. The virtual display number is derived from
+the bridge port (e.g. 9229 → `:29`) so each group gets its own isolated display.
+
+Sign-in is handled via the login script, which stops the service, opens a headed
+window on the real Wayland display (no debug port), then restarts the service.
 
 ## Files
 

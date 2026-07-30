@@ -167,31 +167,51 @@ echo "  profile:    $PROFILE"
 echo "  downloads:  $DOWNLOAD_DIR  (-> /workspace/agent/downloads in container)"
 echo "  debug port: $CHROME_PORT (loopback only)  ->  bridge $BRIDGE_PORT"
 echo "  start URL:  $START_URL"
-# Headless mode: headed Chromium on Wayland (Linux) does not bind
-# --remote-debugging-port — the DevTools HTTP server is silently omitted for
-# windowed instances. Headless=new DOES bind the port and still writes
-# sessions/cookies to the profile, so automation works normally.
+# Service mode uses Xvfb (virtual X11 display) rather than --headless=new.
+# Headed Chromium on a virtual display binds --remote-debugging-port correctly
+# (unlike Wayland windowed mode) and presents a non-headless browser fingerprint
+# (unlike --headless=new, which Cloudflare detects). Profile/cookies are fully
+# preserved. Xvfb is started per-group on a display derived from BRIDGE_PORT
+# (e.g. 9229 → :29) and killed when Chromium exits.
 #
-# Default to headless when LIVE_CHROME_HEADLESS=1 (set by the systemd service).
-# Omit or set to 0 for interactive login runs where you need a visible window.
+# Set LIVE_CHROME_HEADLESS=1 for service mode (done by the systemd unit).
+# Omit or set to 0 for the interactive login window.
 LIVE_CHROME_HEADLESS="${LIVE_CHROME_HEADLESS:-0}"
 
 if [[ "$LIVE_CHROME_HEADLESS" == "1" ]]; then
-  echo
-  echo "Running in headless mode (service mode). The agent connects via DevTools."
-  echo "To sign in to sites, stop the service and re-run with LIVE_CHROME_HEADLESS=0:"
-  echo "  systemctl --user stop nanoclaw-live-chrome-${GROUP}.service"
-  echo "  LIVE_CHROME_HEADLESS=0 bash scripts/live-chrome.sh ${GROUP}"
-  echo "  (sign in, then close the window)"
-  echo "  systemctl --user start nanoclaw-live-chrome-${GROUP}.service"
+  if ! command -v Xvfb >/dev/null 2>&1; then
+    echo "Xvfb not found. Install xorg-server-xvfb (sudo pacman -S xorg-server-xvfb)." >&2
+    exit 1
+  fi
 
-  exec "$CHROME" \
+  # Unique virtual display per group, derived from bridge port (9229 → :29).
+  VDISPLAY_NUM="$((BRIDGE_PORT - 9200))"
+  VDISPLAY=":${VDISPLAY_NUM}"
+
+  echo
+  echo "Running in service mode (Xvfb virtual display ${VDISPLAY})."
+  echo "To sign in to sites use:  bash scripts/live-chrome-login.sh ${GROUP}"
+
+  Xvfb "$VDISPLAY" -screen 0 1920x1080x24 -nolisten tcp &
+  XVFB_PID=$!
+  trap "kill $XVFB_PID 2>/dev/null || true" EXIT
+
+  # Wait up to 3 s for Xvfb socket to appear.
+  for _i in 1 2 3 4 5 6; do
+    [[ -S "/tmp/.X11-unix/X${VDISPLAY_NUM}" ]] && break
+    sleep 0.5
+  done
+
+  export DISPLAY="$VDISPLAY"
+  unset WAYLAND_DISPLAY  # ensure Chromium uses X11, not Wayland
+
+  "$CHROME" \
     --user-data-dir="$PROFILE" \
     --remote-debugging-port="$CHROME_PORT" \
     --remote-allow-origins='*' \
     --no-first-run \
     --no-default-browser-check \
-    --headless=new \
+    --ozone-platform=x11 \
     "$START_URL"
 else
   echo
@@ -201,7 +221,7 @@ else
   echo
   if [[ -z "${LIVE_CHROME_LOGIN:-}" ]]; then
     echo "  Tip: use  bash scripts/live-chrome-login.sh $GROUP  instead — it"
-    echo "  stops/restarts the headless service around this login window automatically."
+    echo "  stops/restarts the service around this login window automatically."
   fi
 
   OZONE_PLATFORM="${LIVE_OZONE_PLATFORM:-}"

@@ -57,7 +57,10 @@ bash scripts/install-live-chrome-autostart.sh --start-now
 This reads the DB to discover which groups have a `chrome-devtools` MCP with
 a bridge URL, writes one `~/.config/systemd/user/nanoclaw-live-chrome-<group>.service`
 per group (with `LIVE_CHROME_HEADLESS=1`), enables them for
-`graphical-session.target`, and (with `--start-now`) starts them immediately.
+`graphical-session.target`, (with `--start-now`) starts them immediately, and
+adds `ufw` INPUT rules allowing Docker containers to reach each bridge port
+on `docker0`. The ufw step requires `sudo` — if it's not available, the script
+prints the commands to run manually.
 
 ## Signing in
 

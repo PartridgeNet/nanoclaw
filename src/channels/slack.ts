@@ -33,7 +33,7 @@ registerChannelAdapter('slack', {
       // "NanoClaw [meal-planner]". Forwarded as chat.postMessage's `username`
       // override (requires the `chat:write.customize` bot scope) via the patched
       // @chat-adapter/slack.
-      senderNameFormat: (name) => `NanoClaw [${name}]`,
+      senderNameFormat: (name) => `Assistant [${name}]`,
     });
     bridge.resolveChannelName = async (platformId: string) => {
       try {

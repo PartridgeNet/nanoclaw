@@ -1,9 +1,9 @@
-# Per-agent Slack sender name (`NanoClaw [<agent-group>]`)
+# Per-agent Slack sender name (`Assistant [<agent-group>]`)
 
 PartridgeNet fork customization. By default every Slack message NanoClaw posts
 shows the same sender ("NanoClaw"), regardless of which agent group produced it.
 This change makes the **replying agent group's name appear in the Slack sender**,
-e.g. `NanoClaw [meal-planner]`, so it's obvious at a glance which agent is
+e.g. `Assistant [meal-planner]`, so it's obvious at a glance which agent is
 talking in a shared workspace. Built 2026-06-30.
 
 > Background on channels and the Chat SDK bridge lives in the root `CLAUDE.md`
@@ -14,7 +14,7 @@ talking in a shared workspace. Built 2026-06-30.
 ## What the user sees
 
 A Slack message from the `meal-planner` agent group is posted with the bot
-display name **`NanoClaw [meal-planner]`** instead of `NanoClaw`. Each agent
+display name **`Assistant [meal-planner]`** instead of `NanoClaw`. Each agent
 group gets its own bracketed name; the bot icon is unchanged.
 
 ## Why it needs two parts
@@ -47,11 +47,11 @@ adapter.deliver(platformId, threadId, { kind, content, files, senderName })
    ▼  OutboundMessage.senderName   (src/channels/adapter.ts)
 Chat SDK bridge deliver()   (src/channels/chat-sdk-bridge.ts)
    │  if config.senderNameFormat && message.senderName:
-   │     username = config.senderNameFormat(message.senderName)  // "NanoClaw [meal-planner]"
+   │     username = config.senderNameFormat(message.senderName)  // "Assistant [meal-planner]"
    ▼  adapter.postMessage(tid, { markdown|card, ...{ username } })
 @chat-adapter/slack postMessage()   (PATCHED)
    ▼  forwards username/icon into chat.postMessage(...)
-Slack renders sender as "NanoClaw [meal-planner]"
+Slack renders sender as "Assistant [meal-planner]"
 ```
 
 Only Slack opts in (via `senderNameFormat` in `src/channels/slack.ts`). Other
@@ -67,7 +67,7 @@ ignore it.
 | `src/delivery.ts` | `ChannelDeliveryAdapter.deliver` gained a trailing `senderName?` param; `deliverMessage` resolves `getAgentGroup(...).name` and passes it. `system`/`agent` kinds return earlier, so internal traffic is unaffected |
 | `src/channels/channel-registry.ts` | `createChannelDeliveryAdapter().deliver` threads `senderName` into the `OutboundMessage` |
 | `src/channels/chat-sdk-bridge.ts` | New opt-in `senderNameFormat?: (agentName: string) => string` config; when set and a `senderName` is present, stamps `username` on the text, display-card, and ask_question payloads |
-| `src/channels/slack.ts` | Passes `senderNameFormat: (name) => \`NanoClaw [${name}]\`` into the bridge — keeps the branding next to the Slack wiring, not in core |
+| `src/channels/slack.ts` | Passes `senderNameFormat: (name) => \`Assistant [${name}]\`` into the bridge — keeps the branding next to the Slack wiring, not in core |
 
 Tests live alongside: `src/channels/chat-sdk-bridge.test.ts` (username stamped on
 text + card paths; omitted with no formatter / no senderName),
@@ -145,7 +145,7 @@ adapters=["slack"]`, and no `missing_scope` / `postMessage` errors in
 ## Verify end-to-end
 
 1. Trigger a reply from a Slack chat wired to one agent group → sender shows
-   `NanoClaw [<that-group-name>]`.
+   `Assistant [<that-group-name>]`.
 2. Repeat from a chat wired to a different agent group → a different bracketed
    name, proving it's per-agent, not a static rename.
 3. A non-Slack channel (if installed) still delivers normally (username ignored).

@@ -1,3 +1,7 @@
+> **PartridgeNet fork note**
+>
+> This fork is the long-running NanoClaw instance repo for the PartridgeNet GitHub organization, which hosts repositories serving the owner and their family. Local code changes for those use cases should be committed here. Any upstream-associated repos needed during NanoClaw setup should be forked into PartridgeNet before being merged or installed here. Upstream NanoClaw and associated-repo updates should be pulled in regularly for improvements and fixes while preserving PartridgeNet-specific changes, not by replacing this fork's history or overwriting local commits.
+
 <p align="center">
   <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
 </p>

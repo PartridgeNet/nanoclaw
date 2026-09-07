@@ -334,6 +334,13 @@ function formatWebhookMessage(msg: MessageInRow): string {
 
 function formatSystemMessage(msg: MessageInRow): string {
   const content = parseContent(msg.content);
+  // PartridgeNet: an async ask_user_question answer arrives as a system message.
+  if (content.type === 'question_response') {
+    const title = escapeXml(String(content.questionTitle || content.questionId || ''));
+    const label = escapeXml(String(content.selectedLabel || content.selectedOption || ''));
+    const qid = escapeXml(String(content.questionId || ''));
+    return `<question_response questionId="${qid}" question="${title}">The user selected: ${label}</question_response>`;
+  }
   const from = originAttr(msg);
   return `<system_response${from} action="${escapeXml(content.action || 'unknown')}" status="${escapeXml(content.status || 'unknown')}">${JSON.stringify(content.result || null)}</system_response>`;
 }

@@ -13,6 +13,10 @@ If you are a fresh install (you ran `git clone`, not `git pull`) and there are n
 
 ---
 
+> **PartridgeNet fork note**
+>
+> This fork is the long-running NanoClaw instance repo for the PartridgeNet GitHub organization, which hosts repositories serving the owner and their family. Local code changes for those use cases should be committed here. Any upstream-associated repos needed during NanoClaw setup should be forked into PartridgeNet before being merged or installed here. Upstream NanoClaw and associated-repo updates should be pulled in regularly for improvements and fixes while preserving PartridgeNet-specific changes, not by replacing this fork's history or overwriting local commits.
+
 # NanoClaw
 
 Personal AI assistant. See [README.md](README.md) for philosophy and setup. Architecture lives in `docs/`.
@@ -162,6 +166,8 @@ Key files: `src/container-restart.ts`, `src/container-runner.ts` (`killContainer
 
 ## Secrets / Credentials / OneCLI
 
+> **PartridgeNet:** the OneCLI gateway is **not** local — it runs on `nipogi-e3` over Tailscale (`http://100.71.226.93:10254`) as a shared, multi-machine vault in open `local` auth mode. Before changing OneCLI URL/auth/networking, read [docs/onecli-remote-gateway.md](docs/onecli-remote-gateway.md).
+
 API keys, OAuth tokens, and auth credentials are managed by the OneCLI gateway. Secrets are injected into per-agent containers at request time — none are passed in env vars or through chat context. The container agent sees this via the `onecli-gateway` container skill (`container/skills/onecli-gateway/SKILL.md`), which teaches it how the proxy works, how to handle auth errors, and to never ask for raw credentials. Host-side wiring: `src/modules/approvals/onecli-approvals.ts`, `ensureAgent()` in `container-runner.ts`. Run `onecli --help`.
 
 ### Secret modes
@@ -303,6 +309,15 @@ This project uses pnpm with `minimumReleaseAge: 4320` (3 days) in `pnpm-workspac
 | [docs/skill-engine-seam.md](docs/skill-engine-seam.md) | Skill-engine consumer contract (wizard / pipeline / agent-relay) + boundary-rule rationale |
 | [docs/templates.md](docs/templates.md) | Agent templates: what they are, stamping via `ncl groups create --template` + the setup wizard, the OneCLI/MCP-credential model, supported providers, and how to contribute one |
 | [docs/hardened-image.md](docs/hardened-image.md) | Opt-in: pull the agent image from a registry instead of building it |
+| [docs/onecli-remote-gateway.md](docs/onecli-remote-gateway.md) | **PartridgeNet:** OneCLI gateway is hosted remotely on `nipogi-e3` over Tailscale (shared vault, `local` auth mode) — topology, ufw, wiring, open items |
+| [docs/onecli-fork-reconciliation.md](docs/onecli-fork-reconciliation.md) | **PartridgeNet:** rebuild-from-main reconciliation plan for the OneCLI fork image |
+| [docs/slack-agent-sender-name.md](docs/slack-agent-sender-name.md) | **PartridgeNet:** Slack sender shows `Assistant [<agent-group>]` — threaded `senderName`, the `@chat-adapter/slack` pnpm patch, the `chat:write.customize` scope |
+| [docs/live-browser.md](docs/live-browser.md) | **PartridgeNet:** persistent headless Chromium per agent group for logged-in browsing; architecture, port map, sign-in via `scripts/live-chrome-login.sh` |
+| [docs/browser-session-export.md](docs/browser-session-export.md) | Host login → export session (cookies + localStorage) into a group workspace; the agent's `agent-browser` reuses it (`scripts/browser-session-export.sh`) |
+| [docs/host-redeploy.md](docs/host-redeploy.md) | **PartridgeNet:** host redeploy script — backup + rebuild + restart |
+| [docs/mobile-channel.md](docs/mobile-channel.md) | **PartridgeNet:** authenticated mobile channel transport (device pairing, access tokens, event queue) |
+| [docs/whatsapp-rs-assistant-plan.md](docs/whatsapp-rs-assistant-plan.md) | **PartridgeNet:** rs-assistant's WhatsApp bridge (repo `PartridgeNet/whatsapp-bridge`) — architecture, deploy gotchas, per-contact send-authorization model |
+| [docs/upstream-sync-2.3.0-plan.md](docs/upstream-sync-2.3.0-plan.md) | **PartridgeNet:** the v2.1.53→v2.3.0 upstream reconciliation plan (this sync) |
 
 ## Container Build Cache
 

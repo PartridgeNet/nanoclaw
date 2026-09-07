@@ -30,9 +30,12 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deploy:host": "bash scripts/host-redeploy.sh",
+    "redeploy:host": "bash scripts/host-redeploy.sh"
   },
   "dependencies": {
+    "@chat-adapter/slack": "4.29.0",
     "@clack/core": "^1.2.0",
     "@clack/prompts": "^1.2.0",
     "@onecli-sh/sdk": "2.2.1",

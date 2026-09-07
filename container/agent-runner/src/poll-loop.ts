@@ -46,6 +46,17 @@ function generateId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// PartridgeNet: async ask_user_question returns "pending" and ends the turn;
+// the user's later click lands as a kind:'system' question_response. Let those
+// through the system-message skip so the agent sees the answer next turn.
+function isQuestionResponse(m: MessageInRow): boolean {
+  try {
+    return JSON.parse(m.content).type === 'question_response';
+  } catch {
+    return false;
+  }
+}
+
 export interface PollLoopConfig {
   provider: AgentProvider;
   /** Declared provider runtime behavior. Contractless providers keep legacy defaults. */
@@ -121,8 +132,10 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
   let isFirstPoll = true;
   while (true) {
     if (config.signal?.aborted) return;
-    // Skip system messages — they're responses for MCP tools (e.g., ask_user_question)
-    const messages = getPendingMessages(isFirstPoll).filter((m) => m.kind !== 'system');
+    // Skip system messages — they're responses for MCP tools (e.g., ask_user_question).
+    // Exception (PartridgeNet): question_response passes through so the async
+    // ask_user_question flow delivers the user's answer to the agent next turn.
+    const messages = getPendingMessages(isFirstPoll).filter((m) => m.kind !== 'system' || isQuestionResponse(m));
     isFirstPoll = false;
     pollCount++;
 
@@ -464,7 +477,11 @@ export async function processQuery(
         // batch (mirrors the two-phase initial-batch selection in
         // db/messages-in.ts).
         const hasFollowUpTrigger = pending.some((m) => m.kind !== 'system' && m.trigger === 1);
-        const newMessages = pending.filter((m) => m.kind !== 'system' && (m.trigger === 1 || hasFollowUpTrigger));
+        // PartridgeNet: a question_response is always follow-up-eligible even
+        // though it's kind:'system' and trigger-agnostic.
+        const newMessages = pending.filter(
+          (m) => (m.kind !== 'system' && (m.trigger === 1 || hasFollowUpTrigger)) || isQuestionResponse(m),
+        );
         if (newMessages.length === 0) return;
 
         // Accumulated context must not engage a warm query by itself.

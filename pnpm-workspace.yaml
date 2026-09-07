@@ -3,6 +3,13 @@ onlyBuiltDependencies:
   - protobufjs
   - sharp
 
+# PartridgeNet: forward chat.postMessage's `username`/icon overrides so the
+# Slack sender shows `Assistant [<agent-group>]` per replying agent group.
+# See docs/slack-agent-sender-name.md. Pinned to the same version as the dep;
+# re-create the patch if @chat-adapter/slack is ever bumped off 4.29.0.
+patchedDependencies:
+  '@chat-adapter/slack@4.29.0': patches/@chat-adapter__slack@4.29.0.patch
+
 # Top-level, NOT nested under a `pnpm:` key: pnpm reads a `pnpm:` config block
 # only from package.json. Nested here in pnpm-workspace.yaml the setting is
 # silently ignored (`pnpm config get minimumReleaseAge` returns undefined with

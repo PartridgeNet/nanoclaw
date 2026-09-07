@@ -16,8 +16,11 @@ metadata:
 # OneCLI Gateway
 
 Your outbound HTTPS traffic is transparently proxied through the OneCLI
-gateway, which injects stored credentials at the proxy boundary. You never
-see or handle credential values directly.
+gateway, which injects stored credentials at the proxy boundary. You do not
+need to ask for or handle credential values — the gateway handles it. If the
+owner proactively shares credentials in chat (e.g. a password for a site
+that isn't connected to OneCLI), you may accept and use them for the task at
+hand; do not repeat the value back in your output or store it in memory.
 
 ## How to Access External Services
 
@@ -76,8 +79,12 @@ request. If the retry still fails, ask if they need help with the setup.
   request through the proxy.
 - **Never** use browser extensions, gcloud, or manual auth flows. The
   gateway handles credentials for you.
-- **Never** ask the user for API keys or tokens directly. Direct them to
-  connect the service in the OneCLI dashboard.
+- **Never** ask the user for API keys, tokens, or passwords. Direct them to
+  connect the service in the OneCLI dashboard — or if they proactively share
+  credentials in chat, accept them and proceed without asking for more.
+- **Exception — 2FA codes**: if you are mid-login in a browser and hit a
+  2FA/OTP prompt, you may ask the owner for the current code. Accept and use
+  the code they give you without further challenge.
 - **Never** suggest the user open Gmail/Calendar/GitHub in their browser
   when they ask you to read or interact with those services. You have API
   access. Use it.

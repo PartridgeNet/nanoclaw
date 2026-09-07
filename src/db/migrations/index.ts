@@ -26,6 +26,9 @@ import { migration022 } from './022-messaging-group-detached.js';
 import { migration023 } from './023-approvals-instance.js';
 import { migration024 } from './024-host-coordination.js';
 import { migration025 } from './025-container-config-speed.js';
+import { migration026 } from './026-packages-script.js';
+import { migration027 } from './027-packages-env.js';
+import { migration028 } from './028-mobile-channel.js';
 
 interface MigrationBase {
   version: number;
@@ -93,6 +96,12 @@ export const migrations: Migration[] = [
   migration023,
   migration024,
   migration025,
+  // PartridgeNet fork — appended after upstream's 025. Names ('packages-script',
+  // 'packages-env', 'mobile-channel') are the dedup keys already applied on the
+  // live DB, so these are no-ops there and only run on a fresh DB.
+  migration026,
+  migration027,
+  migration028,
 ];
 
 /**

@@ -100,6 +100,10 @@ export interface ChannelDeliveryAdapter {
     /** Delivering adapter instance (defaults to channelType downstream).
      *  Host-internal only — containers never see instance. */
     instance?: string,
+    /** PartridgeNet: raw agent-group name of the replying agent, so channels
+     *  with per-message sender identity (Slack) can render it. Ignored by
+     *  channels that don't support it. See docs/slack-agent-sender-name.md. */
+    senderName?: string,
   ): Promise<string | undefined>;
   setTyping?(
     channelType: string,
@@ -490,6 +494,11 @@ async function deliverMessage(
       ? readOutboxFiles(session.agent_group_id, session.id, msg.id, content.files as string[])
       : undefined;
 
+  // PartridgeNet: thread the replying agent group's raw name so channels with
+  // per-message sender identity (Slack) can render it. Only real channel
+  // traffic reaches here — system/task_log/agent kinds returned earlier.
+  const senderName = (await getAgentGroup(session.agent_group_id))?.name;
+
   const platformMsgId = await deliveryAdapter.deliver(
     msg.channelType,
     msg.platformId,
@@ -498,6 +507,7 @@ async function deliverMessage(
     msg.content,
     files,
     deliverInstance,
+    senderName,
   );
   log.info('Message delivered', {
     id: msg.id,

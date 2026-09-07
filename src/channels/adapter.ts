@@ -103,6 +103,13 @@ export interface OutboundMessage {
   kind: string;
   content: unknown; // parsed JSON from messages_out
   files?: OutboundFile[]; // file attachments from the session outbox
+  /**
+   * PartridgeNet: raw agent-group name of the replying agent, threaded from
+   * delivery.ts so channels that support per-message sender identity can render
+   * it (Slack maps it to a `username` override via senderNameFormat). Channels
+   * that don't support it ignore this field. See docs/slack-agent-sender-name.md.
+   */
+  senderName?: string;
 }
 
 /** Discovered conversation info (from syncConversations). */

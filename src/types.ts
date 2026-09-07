@@ -31,6 +31,8 @@ export interface ContainerConfigRow {
   mcp_servers: string; // JSON: Record<string, McpServerConfig>
   packages_apt: string; // JSON: string[]
   packages_npm: string; // JSON: string[]
+  packages_script?: string | null; // PartridgeNet: shell heredoc RUN at image build; NULL = none
+  packages_env?: string | null; // PartridgeNet: JSON Record<string,string> of ENV lines; may be absent
   additional_mounts: string; // JSON: AdditionalMountConfig[]
   cli_scope: string; // 'disabled' | 'group' | 'global'
   timezone: string | null; // IANA id; NULL = follow the install-global timezone

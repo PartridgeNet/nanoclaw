@@ -123,6 +123,14 @@ export async function resolveSession(
       if (existing) {
         return { session: existing, created: false };
       }
+    } else if (sessionMode === 'per-thread' && threadId) {
+      // PartridgeNet: isolated system-scoped sessions with no messaging group
+      // (e.g. a2a:<sourceSessionId>) are keyed by thread_id alone. Enables reuse
+      // of the a2a isolation session instead of recreating one per delegation.
+      const existing = await findSystemSession(agentGroupId, threadId);
+      if (existing) {
+        return { session: existing, created: false };
+      }
     }
 
     const id = generateId();

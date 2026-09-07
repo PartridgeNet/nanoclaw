@@ -137,6 +137,15 @@ RUN mkdir -p /workspace/group /workspace/extra && \
 # agent runs unprivileged and needs none of them.
 RUN find / -xdev -perm -4000 -type f -exec chmod u-s {} + || true
 
+# PartridgeNet: git/libcurl won't preemptively send Proxy-Authorization on
+# CONNECT unless proxyAuthMethod=basic, so the OneCLI egress gateway can't
+# inject credentials and git sees a 401 (even though curl and Node succeed
+# through the same proxy). Baked system-wide (`--system` -> /etc/gitconfig,
+# uid-independent) because the driver now owns the container command — there is
+# no entrypoint shim to run `git config` at boot. Pairs with GIT_SSL_CAINFO,
+# set in the agent ContainerSpec env (src/container-runner.ts).
+RUN git config --system http.proxyAuthMethod basic
+
 USER node
 WORKDIR /workspace/group
 

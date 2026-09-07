@@ -1069,6 +1069,20 @@ export function composeSessionSpec(input: ComposeSessionSpecInput): SessionSpec 
 
   const env: Record<string, string> = {
     TZ: containerConfig.timezone ?? TIMEZONE,
+    // PartridgeNet: loopback + the Docker host gateway must never route through
+    // the OneCLI egress proxy. The gateway injects HTTP(S)_PROXY but no NO_PROXY,
+    // so agent tooling hitting a local address (health checks, curl, Node fetch,
+    // chrome-devtools-mcp -> the host live-browser bridge via host.docker.internal)
+    // gets misrouted and fails. Node 22 undici (EnvHttpProxyAgent) affects
+    // built-in fetch too. Non-secret literals -> the `env` lane (admission-safe).
+    NO_PROXY: 'localhost,127.0.0.1,::1,host.docker.internal',
+    no_proxy: 'localhost,127.0.0.1,::1,host.docker.internal',
+    // PartridgeNet: git/libcurl ignores the OneCLI combined CA (injected as
+    // SSL_CERT_FILE by the gateway-provider) unless GIT_SSL_CAINFO points at it.
+    // An absolute-path value is admission-exempt (isSecretShaped in
+    // drivers/types.ts); the gateway always writes the bundle to this fixed path.
+    // The `git config http.proxyAuthMethod basic` half is baked into the Dockerfile.
+    GIT_SSL_CAINFO: '/tmp/onecli-combined-ca.pem',
     ...mailboxEnvironment,
   };
   // The contributed lane (ContainerSpec.contributedEnv): registry-sourced env,
@@ -1250,7 +1264,10 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
   if (!configRow) throw new Error('Container config not found');
   const aptPackages = JSON.parse(configRow.packages_apt) as string[];
   const npmPackages = JSON.parse(configRow.packages_npm) as string[];
-  if (aptPackages.length === 0 && npmPackages.length === 0) {
+  // PartridgeNet: arbitrary Dockerfile RUN layer + persisted ENV lines.
+  const packagesScript = configRow.packages_script ?? null;
+  const packagesEnv = JSON.parse(configRow.packages_env ?? '{}') as Record<string, string>;
+  if (aptPackages.length === 0 && npmPackages.length === 0 && !packagesScript && Object.keys(packagesEnv).length === 0) {
     throw new Error('No packages to install. Use install_packages first.');
   }
 
@@ -1285,6 +1302,14 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
     const allowlist = npmPackages.map((p) => `echo 'only-built-dependencies[]=${p}' >> /root/.npmrc`).join(' && ');
     dockerfile += `RUN ${allowlist} && pnpm install -g ${npmPackages.join(' ')}\n`;
   }
+  // PartridgeNet: arbitrary build step (heredoc RUN) + persisted ENV lines,
+  // emitted while still USER root, before the drop to USER node below.
+  if (packagesScript) {
+    dockerfile += `RUN <<'__PKGSCRIPT__'\n${packagesScript}\n__PKGSCRIPT__\n`;
+  }
+  for (const [key, val] of Object.entries(packagesEnv)) {
+    dockerfile += `ENV ${key}="${val}"\n`;
+  }
   dockerfile += 'USER node\n';
 
   // Overwrite the provenance label rather than letting it be inherited.
@@ -1307,7 +1332,7 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
   try {
     // Awaited async exec so the single-threaded host stays responsive during
     // the build (can take minutes) instead of blocking on execSync.
-    await execAsync(`${CONTAINER_RUNTIME_BIN} build -t ${imageTag} -f ${tmpDockerfile} .`, {
+    await execAsync(`${CONTAINER_RUNTIME_BIN} build --no-cache -t ${imageTag} -f ${tmpDockerfile} .`, {
       cwd: DATA_DIR,
       timeout: 900_000,
     });

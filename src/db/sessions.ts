@@ -66,6 +66,7 @@ export async function findSessionByAgentGroup(agentGroupId: string): Promise<Ses
        WHERE agent_group_id = ?
          AND status = 'active'
          AND NOT (messaging_group_id IS NULL AND thread_id IS NOT NULL AND thread_id LIKE 'system:%')
+         AND NOT (messaging_group_id IS NULL AND thread_id IS NOT NULL AND thread_id LIKE 'a2a:%')
        ORDER BY created_at DESC
        LIMIT 1`,
     agentGroupId,

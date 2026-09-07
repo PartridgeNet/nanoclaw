@@ -9,7 +9,13 @@ import { getMessagePolicy, removeMessagePolicy, setMessagePolicy } from './db/ag
 import { applyA2aMessageGate } from './message-gate.js';
 import { initTestDb, closeDb, runMigrations, createAgentGroup } from '../../db/index.js';
 import { getDb } from '../../db/connection.js';
-import { createPendingApproval, createSession, deletePendingApproval, getPendingApproval } from '../../db/sessions.js';
+import {
+  createPendingApproval,
+  createSession,
+  deletePendingApproval,
+  getPendingApproval,
+  getSessionsByAgentGroup,
+} from '../../db/sessions.js';
 import { requestApproval } from '../approvals/index.js';
 import { inboundDbPath } from '../../mailbox/sqlite/paths.js';
 import { initSessionFolder } from '../../session-manager.js';
@@ -53,6 +59,14 @@ function readInbound(agentGroupId: string, sessionId: string) {
   }>;
   db.close();
   return rows;
+}
+
+async function findA2aSession(agentGroupId: string, sourceSessionId: string): Promise<Session> {
+  const session = (await getSessionsByAgentGroup(agentGroupId)).find(
+    (candidate) => candidate.thread_id === `a2a:${sourceSessionId}` && candidate.status === 'active',
+  );
+  if (!session) throw new Error(`Expected active a2a session for ${agentGroupId} from ${sourceSessionId}`);
+  return session;
 }
 
 function makeSession(id: string, agentGroupId: string): Session {
@@ -150,7 +164,8 @@ describe('agent message policies', () => {
       { id: 'm1', platform_id: B, content: JSON.stringify({ text: 'hi B' }), in_reply_to: null },
       SA,
     );
-    expect(readInbound(B, SB.id)).toHaveLength(1);
+    expect(readInbound(B, (await findA2aSession(B, SA.id)).id)).toHaveLength(1);
+    expect(readInbound(B, SB.id)).toHaveLength(0);
     expect(requestApproval).not.toHaveBeenCalled();
   });
 
@@ -180,7 +195,8 @@ describe('agent message policies', () => {
       SA,
     );
     expect(requestApproval).not.toHaveBeenCalled();
-    expect(readInbound(A, SA.id)).toHaveLength(1);
+    expect(readInbound(A, (await findA2aSession(A, SA.id)).id)).toHaveLength(1);
+    expect(readInbound(A, SA.id)).toHaveLength(0);
   });
 
   it('ghost policy (policy row, no destination row) still denies — deny beats the policy hold', async () => {
@@ -204,7 +220,7 @@ describe('agent message policies', () => {
     const notify = vi.fn();
     await applyA2aMessageGate({ session: SA, userId: 'telegram:dana', notify, payload, approval });
 
-    const bRows = readInbound(B, SB.id);
+    const bRows = readInbound(B, (await findA2aSession(B, SA.id)).id);
     expect(bRows).toHaveLength(1);
     expect(JSON.parse(bRows[0].content).text).toBe('approved!');
     expect(notify).not.toHaveBeenCalled();

@@ -229,7 +229,11 @@ async function resolveTargetSession(
       return candidate;
     }
   }
-  return (await resolveSession(targetAgentGroupId, null, null, 'agent-shared')).session;
+  // PartridgeNet: no peer history — create an isolated session keyed to this
+  // source session (thread_id `a2a:<sourceSession.id>`, per-thread) rather than
+  // hijacking the newest agent-shared session just because it was most recently
+  // active. Keeps separate inbound delegations in separate target sessions.
+  return (await resolveSession(targetAgentGroupId, null, `a2a:${sourceSession.id}`, 'per-thread')).session;
 }
 
 export async function routeAgentMessage(

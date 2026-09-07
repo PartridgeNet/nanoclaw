@@ -366,6 +366,14 @@ export interface ChatSdkBridgeConfig {
    * and reactions still target the head of the reply.
    */
   maxTextLength?: number;
+  /**
+   * PartridgeNet: when set, maps an agent group name to the per-message sender
+   * name the platform should display (forwarded as Slack's `username` override).
+   * Channels that don't support per-message identity leave this unset and behave
+   * as before — the extra `username` field is harmless for adapters that ignore
+   * it. See docs/slack-agent-sender-name.md.
+   */
+  senderNameFormat?: (agentName: string) => string;
 }
 
 /**
@@ -713,6 +721,32 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
         setupConfig.onAction(questionId, selectedOption, userId);
       });
 
+      // PartridgeNet: forward emoji reactions to the agent as synthetic
+      // chat-sdk inbound messages (kind 'chat-sdk' is in the closed inbound
+      // set; the 'reaction' discriminator lives inside free-form content).
+      // Only additions are forwarded; removals are ignored. isMention:true so
+      // routing engages the agent even on otherwise-unsubscribed threads.
+      chat.onReaction(async (event) => {
+        if (!event.added) return;
+        const channelId = adapter.channelIdFromThreadId(event.threadId);
+        await setupConfig.onInbound(channelId, event.threadId, {
+          id: `reaction-${event.messageId}-${event.rawEmoji}`,
+          kind: 'chat-sdk',
+          content: {
+            type: 'reaction',
+            text: `:${event.rawEmoji}:`,
+            rawEmoji: event.rawEmoji,
+            reactedToMessageId: event.messageId,
+            senderId: event.user.userId,
+            sender: event.user.userName ?? event.user.userId,
+            senderName: event.user.userName ?? event.user.userId,
+          },
+          timestamp: new Date().toISOString(),
+          isMention: true,
+          isGroup: true,
+        });
+      });
+
       await chat.initialize();
 
       // Test seam: unit tests drive the SDK's public process* dispatchers
@@ -802,6 +836,16 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
       const tid = threadId ?? platformId;
       const content = message.content as Record<string, unknown>;
 
+      // PartridgeNet: per-message sender identity (Slack `username` override).
+      // Only set when the channel opted in via senderNameFormat AND the host
+      // supplied the agent group name. Forwarding into chat.postMessage lives in
+      // the patched @chat-adapter/slack; adapters without the patch ignore it.
+      // Files-only messages post via files.upload, which can't carry a username
+      // override — that path is left unchanged (see docs/slack-agent-sender-name.md).
+      const username =
+        config.senderNameFormat && message.senderName ? config.senderNameFormat(message.senderName) : undefined;
+      const authorship = username ? { username } : {};
+
       if (content.operation === 'edit' && content.messageId) {
         const terminalCard = content.terminalCard as Partial<TerminalApprovalCard> | undefined;
         if (
@@ -857,6 +901,7 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
         const result = await adapter.postMessage(tid, {
           card,
           fallbackText: `${title}\n\n${question}\nOptions: ${options.map((o) => o.label).join(', ')}`,
+          ...authorship,
         });
         return result?.id;
       }
@@ -920,7 +965,7 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
         }
 
         const card = Card({ title, children: cardChildren });
-        const result = await adapter.postMessage(tid, { card, fallbackText });
+        const result = await adapter.postMessage(tid, { card, fallbackText, ...authorship });
         return result?.id;
       }
 
@@ -945,7 +990,7 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
           const attachFiles = i === 0 && fileUploads && fileUploads.length > 0;
           const result = await adapter.postMessage(
             tid,
-            attachFiles ? { markdown: chunk, files: fileUploads } : { markdown: chunk },
+            attachFiles ? { markdown: chunk, files: fileUploads, ...authorship } : { markdown: chunk, ...authorship },
           );
           if (i === 0) firstId = result?.id;
         }

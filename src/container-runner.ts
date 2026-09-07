@@ -1267,7 +1267,12 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
   // PartridgeNet: arbitrary Dockerfile RUN layer + persisted ENV lines.
   const packagesScript = configRow.packages_script ?? null;
   const packagesEnv = JSON.parse(configRow.packages_env ?? '{}') as Record<string, string>;
-  if (aptPackages.length === 0 && npmPackages.length === 0 && !packagesScript && Object.keys(packagesEnv).length === 0) {
+  if (
+    aptPackages.length === 0 &&
+    npmPackages.length === 0 &&
+    !packagesScript &&
+    Object.keys(packagesEnv).length === 0
+  ) {
     throw new Error('No packages to install. Use install_packages first.');
   }
 
